@@ -4,10 +4,23 @@ import * as repo from './consultations.repository.js';
 import { env } from '../../config/env.js';
 import { getCentralPrisma, getTenantDbUrl } from '../../core/tenant-registry.js';
 import { getLiveKitAdapter } from '../../adapters/livekit/index.js';
-import { transcriptionQueue } from '../../jobs/queue.js';
+import { consultationFinalizeQueue } from '../../jobs/queue.js';
 import { auditLog } from '../../core/audit-logger.js';
 import { ForbiddenError, NotFoundError } from '../../core/errors.js';
 import type { AuthContext } from '../../types/auth.js';
+import {
+  closeLiveSession,
+  createLiveSession,
+  getLiveSessionByAppointment,
+  buildFullText,
+  getFinalSegments,
+} from './live-transcript.session.js';
+import { parseStoredSegments } from './consultation-transcript.merge.js';
+import {
+  buildSpeakerLabelsFromAppointment,
+  enrichSegmentsForApi,
+  formatTranscriptFromSegments,
+} from './consultation-speaker-labels.js';
 
 type AppointmentWithProfiles = NonNullable<
   Awaited<ReturnType<typeof repo.findAppointmentById>>
@@ -105,8 +118,19 @@ export async function startRecording(
   tenantPrisma: PrismaClient,
   appointmentId: string,
 ) {
+  if (auth.role !== 'doctor' && auth.role !== 'admin') {
+    throw new ForbiddenError('Only doctors can start recording');
+  }
+
   const appointment = await repo.findAppointmentById(tenantPrisma, appointmentId);
   if (!appointment || appointment.orgId !== auth.orgId) throw new NotFoundError('Appointment not found');
+
+  if (auth.role === 'doctor') {
+    const doctor = await repo.findDoctorByUserId(tenantPrisma, auth.userId);
+    if (!doctor || appointment.doctorId !== doctor.id) {
+      throw new ForbiddenError('Not your appointment');
+    }
+  }
 
   if (appointment.consentStatus !== 'accepted') {
     throw new ForbiddenError('Recording requires patient consent');
@@ -116,16 +140,37 @@ export async function startRecording(
     throw new ForbiddenError('Patient has declined recording');
   }
 
+  const existingLive = getLiveSessionByAppointment(appointmentId);
+  if (existingLive) {
+    return {
+      recordingId: existingLive.recordingId,
+      liveAudioWsPath: '/api/consultations/live-audio',
+    };
+  }
+
   const orgSlug = auth.orgId.replace(/-/g, '').slice(0, 12);
   const bucket = `${orgSlug}-recordings`;
-  const storageKey = `${appointmentId}/${uuidv4()}.mp4`;
+  const storageKey = `${appointmentId}/${uuidv4()}.live`;
+  const recordingId = uuidv4();
 
-  const recording = await repo.createRecording(tenantPrisma, {
-    id: uuidv4(),
+  await repo.createRecording(tenantPrisma, {
+    id: recordingId,
     appointmentId,
     orgId: auth.orgId,
     storageBucket: bucket,
     storageKey,
+  });
+
+  await repo.updateRecordingStatus(tenantPrisma, recordingId, 'processing');
+
+  const tenantDbUrl = await getTenantDbUrl(auth.orgId);
+  createLiveSession({
+    recordingId,
+    appointmentId,
+    orgId: auth.orgId,
+    patientId: appointment.patientId,
+    tenantDbUrl,
+    speakerLabels: buildSpeakerLabelsFromAppointment(appointment),
   });
 
   await auditLog({
@@ -134,10 +179,40 @@ export async function startRecording(
     orgId: auth.orgId,
     action: 'START_RECORDING',
     resourceType: 'ConsultationRecording',
-    resourceId: recording.id,
+    resourceId: recordingId,
   });
 
-  return { recordingId: recording.id, storageBucket: bucket, storageKey };
+  return {
+    recordingId,
+    liveAudioWsPath: '/api/consultations/live-audio',
+  };
+}
+
+async function finalizeRecording(
+  tenantPrisma: PrismaClient,
+  auth: AuthContext,
+  appointmentId: string,
+  recordingId: string,
+) {
+  const closed = await closeLiveSession(recordingId);
+  const fullText = closed?.fullText?.trim() ?? '';
+  const segments = closed?.segments ?? [];
+  const durationSeconds = closed?.durationSeconds ?? 0;
+
+  await repo.updateRecordingStatus(tenantPrisma, recordingId, 'processing');
+
+  const tenantDbUrl = await getTenantDbUrl(auth.orgId);
+  await consultationFinalizeQueue.add('consultation.finalize', {
+    tenantDbUrl,
+    orgId: auth.orgId,
+    recordingId,
+    appointmentId,
+    fullText,
+    segments,
+    durationSeconds,
+  });
+
+  return { recordingId, status: 'processing' as const, fullText };
 }
 
 export async function stopRecording(
@@ -148,15 +223,7 @@ export async function stopRecording(
   const recording = await repo.findRecordingByAppointment(tenantPrisma, appointmentId);
   if (!recording || recording.orgId !== auth.orgId) throw new NotFoundError('Recording not found');
 
-  await repo.updateRecordingStatus(tenantPrisma, recording.id, 'uploaded');
-
-  const tenantDbUrl = await getTenantDbUrl(auth.orgId);
-  await transcriptionQueue.add('consultation.transcribe', {
-    tenantDbUrl,
-    orgId: auth.orgId,
-    recordingId: recording.id,
-    appointmentId,
-  });
+  const result = await finalizeRecording(tenantPrisma, auth, appointmentId, recording.id);
 
   await auditLog({
     tenantPrisma,
@@ -167,7 +234,7 @@ export async function stopRecording(
     resourceId: recording.id,
   });
 
-  return { recordingId: recording.id, status: 'processing' };
+  return result;
 }
 
 export async function getTranscript(
@@ -177,6 +244,21 @@ export async function getTranscript(
 ) {
   const appointment = await repo.findAppointmentById(tenantPrisma, appointmentId);
   if (!appointment || appointment.orgId !== auth.orgId) throw new NotFoundError('Appointment not found');
+
+  const speakerLabels = buildSpeakerLabelsFromAppointment(appointment);
+
+  const live = getLiveSessionByAppointment(appointmentId);
+  if (live) {
+    return {
+      id: 'live',
+      appointmentId,
+      orgId: auth.orgId,
+      content: buildFullText(live),
+      segments: enrichSegmentsForApi(getFinalSegments(live), speakerLabels),
+      isLive: true,
+      createdAt: new Date().toISOString(),
+    };
+  }
 
   const transcript = await repo.findTranscriptByAppointment(tenantPrisma, appointmentId);
   if (!transcript) throw new NotFoundError('Transcript not ready yet');
@@ -190,7 +272,21 @@ export async function getTranscript(
     resourceId: transcript.id,
   });
 
-  return transcript;
+  const storedSegments = parseStoredSegments(transcript.segments);
+  const content =
+    storedSegments.length > 0
+      ? formatTranscriptFromSegments(storedSegments, speakerLabels)
+      : transcript.fullText;
+
+  return {
+    id: transcript.id,
+    appointmentId: transcript.appointmentId,
+    orgId: transcript.orgId,
+    content,
+    segments: enrichSegmentsForApi(storedSegments, speakerLabels),
+    isLive: false,
+    createdAt: transcript.createdAt.toISOString(),
+  };
 }
 
 export async function getOutputs(
@@ -201,5 +297,15 @@ export async function getOutputs(
   const appointment = await repo.findAppointmentById(tenantPrisma, appointmentId);
   if (!appointment || appointment.orgId !== auth.orgId) throw new NotFoundError('Appointment not found');
 
-  return repo.listAiOutputsByAppointment(tenantPrisma, appointmentId);
+  const outputs = await repo.listAiOutputsByAppointment(tenantPrisma, appointmentId);
+
+  if (auth.role === 'patient') {
+    return outputs.filter(
+      (o) =>
+        (o.type === 'patient_summary' || o.type === 'follow_up_instructions') &&
+        (o.status === 'approved' || o.status === 'edited'),
+    );
+  }
+
+  return outputs;
 }

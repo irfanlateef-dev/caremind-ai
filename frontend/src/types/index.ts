@@ -138,11 +138,21 @@ export interface ConsultationRecording {
   status: 'recording' | 'processing' | 'done' | 'failed';
 }
 
+export interface TranscriptSegmentView {
+  speaker: string;
+  speakerRole?: 'doctor' | 'patient';
+  text: string;
+  startSeconds?: number;
+  endSeconds?: number;
+}
+
 export interface Transcript {
   id: string;
   appointmentId: string;
   orgId: string;
   content: string;
+  segments?: TranscriptSegmentView[];
+  isLive?: boolean;
   deepgramResponse?: unknown;
   createdAt: string;
 }

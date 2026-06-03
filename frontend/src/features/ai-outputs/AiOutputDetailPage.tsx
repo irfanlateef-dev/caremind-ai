@@ -4,11 +4,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, X, Edit3, History } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button, Card, CardHeader, Textarea, Modal, Skeleton } from '@/components/ui';
+import { MarkdownContent } from '@/components/shared/MarkdownContent';
 import { AiOutputStatusBadge } from '@/components/shared/StatusBadge';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { aiOutputsApi, aiOutputKeys } from '@/api/aiOutputs.api';
+import { AiGenerationStatusBanner } from './AiGenerationStatusBanner';
 import type { AiOutput, AiOutputType } from '@/types';
-import { AiOutputType as AiOutputTypeEnum } from '@/types';
+import { UserRole } from '@/types';
+import { useAuthStore } from '@/stores/auth.store';
 import { formatDate } from '@/utils';
 
 const TYPE_LABELS: Record<AiOutputType, string> = {
@@ -18,19 +21,14 @@ const TYPE_LABELS: Record<AiOutputType, string> = {
   followup_instructions: 'Follow-up Instructions',
 };
 
-const TYPE_ORDER: AiOutputType[] = [
-  AiOutputTypeEnum.SOAP_NOTE,
-  AiOutputTypeEnum.CLINICAL_SUMMARY,
-  AiOutputTypeEnum.PATIENT_SUMMARY,
-  AiOutputTypeEnum.FOLLOWUP_INSTRUCTIONS,
-];
-
 interface OutputCardProps {
   output: AiOutput;
   onRefresh: () => void;
 }
 
 function OutputCard({ output, onRefresh }: OutputCardProps) {
+  const role = useAuthStore((s) => s.role);
+  const canReview = role === UserRole.DOCTOR || role === UserRole.ADMIN;
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(output.currentContent);
@@ -42,6 +40,17 @@ function OutputCard({ output, onRefresh }: OutputCardProps) {
     enabled: historyOpen,
   });
 
+  const saveMutation = useMutation({
+    mutationFn: (content: string) => aiOutputsApi.save(output.id, content),
+    onSuccess: () => {
+      toast.success('Changes saved');
+      setEditing(false);
+      onRefresh();
+      queryClient.invalidateQueries({ queryKey: aiOutputKeys.all });
+    },
+    onError: () => toast.error('Failed to save'),
+  });
+
   const approveMutation = useMutation({
     mutationFn: (editedContent?: string) => aiOutputsApi.approve(output.id, editedContent),
     onSuccess: () => {
@@ -49,6 +58,7 @@ function OutputCard({ output, onRefresh }: OutputCardProps) {
       setEditing(false);
       onRefresh();
       queryClient.invalidateQueries({ queryKey: aiOutputKeys.all });
+      queryClient.invalidateQueries({ queryKey: aiOutputKeys.generationStatus(output.appointmentId) });
     },
     onError: () => toast.error('Failed to approve'),
   });
@@ -64,12 +74,14 @@ function OutputCard({ output, onRefresh }: OutputCardProps) {
   });
 
   const isDirty = editContent !== output.currentContent;
-  const actionLoading = approveMutation.isPending || rejectMutation.isPending;
+  const actionLoading =
+    saveMutation.isPending || approveMutation.isPending || rejectMutation.isPending;
 
   return (
     <Card>
       <CardHeader
         title={TYPE_LABELS[output.type]}
+        subtitle={formatDate(output.createdAt)}
         action={
           <div className="flex items-center gap-2">
             <AiOutputStatusBadge status={output.status} />
@@ -92,7 +104,7 @@ function OutputCard({ output, onRefresh }: OutputCardProps) {
             onChange={(e) => setEditContent(e.target.value)}
             className="min-h-[200px] font-mono text-sm"
           />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -102,23 +114,41 @@ function OutputCard({ output, onRefresh }: OutputCardProps) {
             </Button>
             <Button
               size="sm"
+              variant="outline"
               disabled={!isDirty}
-              loading={actionLoading}
-              onClick={() => approveMutation.mutate(editContent)}
+              loading={saveMutation.isPending}
+              onClick={() => saveMutation.mutate(editContent)}
             >
-              Save & Approve
+              Save
             </Button>
+            {output.status === 'pending_review' && (
+              <Button
+                size="sm"
+                disabled={!isDirty}
+                loading={approveMutation.isPending}
+                onClick={() => approveMutation.mutate(editContent)}
+              >
+                Save & Approve
+              </Button>
+            )}
+            {(output.status === 'approved' || output.status === 'edited') && isDirty && (
+              <Button
+                size="sm"
+                loading={approveMutation.isPending}
+                onClick={() => approveMutation.mutate(editContent)}
+              >
+                Save & Re-approve
+              </Button>
+            )}
           </div>
         </div>
       ) : (
         <div>
-          <div className="prose prose-sm max-w-none mb-4">
-            <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-              {output.currentContent}
-            </p>
+          <div className="mb-4 max-h-[32rem] overflow-y-auto pr-1">
+            <MarkdownContent content={output.currentContent} />
           </div>
 
-          {output.status === 'pending_review' && (
+          {canReview && output.status === 'pending_review' && (
             <div className="flex flex-wrap gap-2 pt-3 border-t border-border">
               <Button
                 size="sm"
@@ -151,7 +181,7 @@ function OutputCard({ output, onRefresh }: OutputCardProps) {
             </div>
           )}
 
-          {(output.status === 'approved' || output.status === 'edited') && (
+          {canReview && (output.status === 'approved' || output.status === 'edited') && (
             <Button
               size="sm"
               variant="ghost"
@@ -170,15 +200,15 @@ function OutputCard({ output, onRefresh }: OutputCardProps) {
         <div className="space-y-4">
           <div>
             <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-2">Original (AI Generated)</h3>
-            <div className="bg-surface rounded-lg p-4 text-sm text-slate-700 whitespace-pre-wrap font-mono leading-relaxed max-h-60 overflow-y-auto">
-              {history?.originalContent ?? output.originalContent}
+            <div className="bg-surface rounded-lg p-4 max-h-60 overflow-y-auto">
+              <MarkdownContent content={history?.originalContent ?? output.originalContent} />
             </div>
           </div>
           {(history?.currentContent ?? output.currentContent) !== (history?.originalContent ?? output.originalContent) && (
             <div>
               <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-2">Current</h3>
-              <div className="bg-success-50 border border-success-100 rounded-lg p-4 text-sm text-slate-700 whitespace-pre-wrap font-mono leading-relaxed max-h-60 overflow-y-auto">
-                {history?.currentContent ?? output.currentContent}
+              <div className="bg-success-50 border border-success-100 rounded-lg p-4 max-h-60 overflow-y-auto">
+                <MarkdownContent content={history?.currentContent ?? output.currentContent} />
               </div>
             </div>
           )}
@@ -201,12 +231,16 @@ interface AiOutputDetailPageProps {
 export function AiOutputDetailPage({ appointmentId: propAppointmentId, embedded = false }: AiOutputDetailPageProps) {
   const params = useParams<{ appointmentId: string }>();
   const appointmentId = propAppointmentId ?? params.appointmentId!;
+  const role = useAuthStore((s) => s.role);
+  const isStaff = role === UserRole.DOCTOR || role === UserRole.ADMIN;
 
   const { data: outputs, isLoading, refetch } = useQuery({
     queryKey: aiOutputKeys.byAppointment(appointmentId),
     queryFn: () => aiOutputsApi.getByAppointment(appointmentId),
     enabled: !!appointmentId,
     retry: 1,
+    refetchInterval: (query) =>
+      isStaff && (query.state.data?.length ?? 0) === 0 ? 5000 : false,
   });
 
   if (isLoading) {
@@ -224,18 +258,41 @@ export function AiOutputDetailPage({ appointmentId: propAppointmentId, embedded 
 
   if (!outputs || outputs.length === 0) {
     return (
-      <Card>
-        <div className="text-center py-10">
-          <p className="text-muted">No AI outputs generated for this appointment yet.</p>
-          <p className="text-sm text-muted mt-1">Outputs are generated after the consultation transcript is processed.</p>
-        </div>
-      </Card>
+      <div className={embedded ? 'space-y-4' : 'p-6 space-y-4'}>
+        {!embedded && (
+          <PageHeader
+            title="AI Outputs"
+            subtitle={
+              isStaff
+                ? 'Review AI-generated clinical documents'
+                : 'Visit summaries from your doctor'
+            }
+          />
+        )}
+        {isStaff && (
+          <AiGenerationStatusBanner appointmentId={appointmentId} onOutputsReady={() => void refetch()} />
+        )}
+        <Card>
+          <div className="text-center py-10">
+            <p className="text-muted">
+              {isStaff
+                ? 'No AI outputs generated for this appointment yet.'
+                : 'No visit summary available yet.'}
+            </p>
+            <p className="text-sm text-muted mt-1">
+              {isStaff
+                ? 'Outputs are created after the consultation transcript is saved.'
+                : 'Your doctor will share a summary here after reviewing your visit.'}
+            </p>
+          </div>
+        </Card>
+      </div>
     );
   }
 
-  const sortedOutputs = [...outputs].sort((a, b) => {
-    return TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type);
-  });
+  const sortedOutputs = [...outputs].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
 
   return (
     <div className={embedded ? 'space-y-4' : 'p-6 space-y-6'}>
@@ -244,6 +301,9 @@ export function AiOutputDetailPage({ appointmentId: propAppointmentId, embedded 
           title="AI Outputs"
           subtitle={`${outputs.length} outputs for this appointment`}
         />
+      )}
+      {isStaff && outputs.length < 4 && (
+        <AiGenerationStatusBanner appointmentId={appointmentId} onOutputsReady={() => void refetch()} />
       )}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {sortedOutputs.map((output) => (

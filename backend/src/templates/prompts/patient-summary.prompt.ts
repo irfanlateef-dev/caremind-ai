@@ -3,6 +3,7 @@ export function buildPatientSummaryPrompt(
   soapNote: string,
 ): string {
   return `You are a patient communication assistant. Write a clear, friendly visit summary for the patient to take home.
+The source transcript names the doctor and patient on each line; reflect their roles accurately.
 
 ${soapNote ? `Doctor's notes summary:\n${soapNote}\n\n` : ''}Use plain English — no medical jargon. Include:
 - What was discussed during the visit

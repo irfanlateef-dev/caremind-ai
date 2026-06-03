@@ -8,12 +8,59 @@ import { v4 as uuidv4 } from 'uuid';
 export const aiOutputRoutes = Router();
 
 aiOutputRoutes.get(
+  '/appointment/:appointmentId/generation-status',
+  asyncHandler(async (req, res) => {
+    const result = await service.getGenerationStatus(
+      req.auth,
+      req.tenantPrisma,
+      req.params['appointmentId']!,
+    );
+    res.json({
+      data: result,
+      meta: { requestId: uuidv4(), timestamp: new Date().toISOString() },
+    });
+  }),
+);
+
+aiOutputRoutes.post(
+  '/appointment/:appointmentId/retry-generation',
+  asyncHandler(async (req, res) => {
+    const result = await service.retryGeneration(
+      req.auth,
+      req.tenantPrisma,
+      req.params['appointmentId']!,
+    );
+    res.json({
+      data: result,
+      meta: { requestId: uuidv4(), timestamp: new Date().toISOString() },
+    });
+  }),
+);
+
+aiOutputRoutes.get(
   '/appointment/:appointmentId',
   asyncHandler(async (req, res) => {
     const result = await service.listOutputsForAppointment(
       req.auth,
       req.tenantPrisma,
       req.params['appointmentId']!,
+    );
+    res.json({
+      data: result,
+      meta: { requestId: uuidv4(), timestamp: new Date().toISOString() },
+    });
+  }),
+);
+
+aiOutputRoutes.patch(
+  '/:id/save',
+  validate({ body: service.saveOutputSchema }),
+  asyncHandler(async (req, res) => {
+    const result = await service.saveOutput(
+      req.auth,
+      req.tenantPrisma,
+      req.params['id']!,
+      req.body.content,
     );
     res.json({
       data: result,

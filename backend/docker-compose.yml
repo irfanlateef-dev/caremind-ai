@@ -113,6 +113,8 @@ services:
       # Override SMTP host when backend runs in Docker (Mailhog service name)
       SMTP_HOST: mailhog
       SMTP_PORT: '1025'
+      # ~30 min live consultations + sequential AI jobs (default Node heap is ~2GB)
+      NODE_OPTIONS: --max-old-space-size=6144
     depends_on:
       postgres-central:
         condition: service_healthy

@@ -6,6 +6,7 @@ export type AuditAction =
   | 'WRITE_NOTE'
   | 'APPROVE_OUTPUT'
   | 'REJECT_OUTPUT'
+  | 'RETRY_AI_GENERATION'
   | 'EDIT_OUTPUT'
   | 'UPLOAD_DOCUMENT'
   | 'DELETE_DOCUMENT'

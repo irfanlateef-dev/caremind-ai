@@ -1,5 +1,6 @@
 export function buildSoapNotePrompt(transcript: string): string {
   return `You are a clinical documentation assistant. Generate a SOAP note from the following consultation transcript.
+The transcript uses "Dr. [Name]:" for the doctor and the patient's full name for the patient. Attribute statements to the correct speaker.
 
 Format strictly as:
 SUBJECTIVE:

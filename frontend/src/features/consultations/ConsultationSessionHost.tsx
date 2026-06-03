@@ -7,6 +7,7 @@ import { useConsultationSessionStore } from '@/stores/consultation-session.store
 import { UserRole } from '@/types';
 import { ConsultationVideoRoom } from './ConsultationVideoRoom';
 import { ConsultationMinimizedCall } from './ConsultationMinimizedCall';
+import { consultationsApi } from '@/api/consultations.api';
 import { ConsultationSidePanel } from './ConsultationSidePanel';
 
 export function ConsultationSessionHost() {
@@ -30,6 +31,11 @@ export function ConsultationSessionHost() {
   const isDoctor = role === UserRole.DOCTOR || role === UserRole.ADMIN;
 
   const handleDisconnected = () => {
+    const { isRecording: recordingActive, appointmentId: apptId } =
+      useConsultationSessionStore.getState();
+    if (recordingActive && apptId) {
+      void consultationsApi.stopRecording(apptId).catch(() => undefined);
+    }
     endSession();
     navigate(`/appointments/${appointmentId}`);
   };

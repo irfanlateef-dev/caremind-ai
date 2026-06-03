@@ -49,7 +49,7 @@ export async function findTranscriptByAppointment(prisma: PrismaClient, appointm
 export async function listAiOutputsByAppointment(prisma: PrismaClient, appointmentId: string) {
   return prisma.aiOutput.findMany({
     where: { appointmentId },
-    orderBy: { createdAt: 'asc' },
+    orderBy: [{ createdAt: 'desc' }],
   });
 }
 

@@ -22,6 +22,11 @@ export const transcriptionQueue = new Queue('transcription', {
   defaultJobOptions,
 });
 
+export const consultationFinalizeQueue = new Queue('consultation-finalize', {
+  connection,
+  defaultJobOptions,
+});
+
 export const embeddingQueue = new Queue('embedding', {
   connection,
   defaultJobOptions,
@@ -45,6 +50,23 @@ export interface TranscriptionJobData {
   orgId: string;
   recordingId: string;
   appointmentId: string;
+}
+
+export interface ConsultationFinalizeJobData {
+  tenantDbUrl: string;
+  orgId: string;
+  recordingId: string;
+  appointmentId: string;
+  fullText: string;
+  segments: Array<{
+    speaker?: string;
+    startSeconds: number;
+    endSeconds: number;
+    text: string;
+  }>;
+  durationSeconds: number;
+  /** full: save transcript + generate AI; ai_only: regenerate AI from DB transcript */
+  mode?: 'full' | 'ai_only';
 }
 
 export interface EmbeddingJobData {

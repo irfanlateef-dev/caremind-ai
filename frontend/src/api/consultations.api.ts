@@ -1,5 +1,27 @@
 import { apiClient, unwrap } from './client';
-import type { ConsultationRecording, LiveKitTokenResponse, Transcript } from '@/types';
+import type {
+  ConsultationRecording,
+  LiveKitTokenResponse,
+  Transcript,
+  TranscriptSegmentView,
+} from '@/types';
+
+function mapTranscriptSegments(raw: unknown): TranscriptSegmentView[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const segments = raw
+    .filter((s): s is Record<string, unknown> => typeof s === 'object' && s !== null)
+    .map((s) => ({
+      speaker: String(s.speaker ?? 'Unknown'),
+      speakerRole: (s.speakerRole === 'doctor' || s.speakerRole === 'patient'
+        ? s.speakerRole
+        : undefined) as 'doctor' | 'patient' | undefined,
+      text: String(s.text ?? ''),
+      startSeconds: typeof s.startSeconds === 'number' ? s.startSeconds : undefined,
+      endSeconds: typeof s.endSeconds === 'number' ? s.endSeconds : undefined,
+    }))
+    .filter((s) => s.text.length > 0);
+  return segments.length > 0 ? segments : undefined;
+}
 
 const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL ?? 'wss://localhost:7880';
 
@@ -32,15 +54,18 @@ export const consultationsApi = {
     };
   },
 
-  startRecording: async (appointmentId: string): Promise<ConsultationRecording> => {
+  startRecording: async (
+    appointmentId: string
+  ): Promise<ConsultationRecording & { liveAudioWsPath: string }> => {
     const res = await apiClient.post(`/api/consultations/${appointmentId}/recording/start`);
-    const raw = unwrap(res) as { recordingId: string };
+    const raw = unwrap(res) as { recordingId: string; liveAudioWsPath: string };
     return {
       id: raw.recordingId,
       appointmentId,
       orgId: '',
       startedAt: new Date().toISOString(),
       status: 'recording',
+      liveAudioWsPath: raw.liveAudioWsPath,
     };
   },
 
@@ -64,7 +89,9 @@ export const consultationsApi = {
         id: String(raw.id),
         appointmentId,
         orgId: String(raw.orgId ?? ''),
-        content: String(raw.content ?? ''),
+        content: String(raw.content ?? raw.fullText ?? ''),
+        segments: mapTranscriptSegments(raw.segments),
+        isLive: Boolean(raw.isLive),
         createdAt:
           typeof raw.createdAt === 'string'
             ? raw.createdAt

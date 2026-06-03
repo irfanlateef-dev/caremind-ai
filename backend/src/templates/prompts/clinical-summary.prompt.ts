@@ -3,6 +3,7 @@ export function buildClinicalSummaryPrompt(
   patientContext: string,
 ): string {
   return `You are a clinical documentation assistant. Generate a concise clinical summary for the treating physician.
+The transcript labels each line with the doctor (Dr. [Name]) or patient name. Use those labels to attribute who said what.
 
 Patient context: ${patientContext}
 

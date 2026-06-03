@@ -17,6 +17,9 @@ interface ConsultationSessionState {
   appointment: Appointment | null;
   isMinimized: boolean;
   sidePanelOpen: boolean;
+  recordingId: string | null;
+  isRecording: boolean;
+  liveTranscriptText: string;
 }
 
 interface ConsultationSessionActions {
@@ -25,6 +28,8 @@ interface ConsultationSessionActions {
   setMinimized: (minimized: boolean) => void;
   setSidePanelOpen: (open: boolean) => void;
   toggleSidePanel: () => void;
+  setRecording: (recordingId: string | null) => void;
+  setLiveTranscriptText: (text: string) => void;
 }
 
 const idleState: ConsultationSessionState = {
@@ -35,6 +40,9 @@ const idleState: ConsultationSessionState = {
   appointment: null,
   isMinimized: false,
   sidePanelOpen: false,
+  recordingId: null,
+  isRecording: false,
+  liveTranscriptText: '',
 };
 
 export const useConsultationSessionStore = create<
@@ -51,6 +59,9 @@ export const useConsultationSessionStore = create<
       appointment: payload.appointment,
       isMinimized: payload.isMinimized ?? false,
       sidePanelOpen: false,
+      recordingId: null,
+      isRecording: false,
+      liveTranscriptText: '',
     }),
 
   endSession: () => set(idleState),
@@ -60,4 +71,13 @@ export const useConsultationSessionStore = create<
   setSidePanelOpen: (open) => set({ sidePanelOpen: open }),
 
   toggleSidePanel: () => set((s) => ({ sidePanelOpen: !s.sidePanelOpen })),
+
+  setRecording: (recordingId) =>
+    set({
+      recordingId,
+      isRecording: recordingId !== null,
+      liveTranscriptText: recordingId ? '' : '',
+    }),
+
+  setLiveTranscriptText: (text) => set({ liveTranscriptText: text }),
 }));

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   Circle,
   ChevronRight,
@@ -14,8 +13,10 @@ import { consultationsApi } from '@/api/consultations.api';
 import type { Appointment } from '@/types';
 import { cn } from '@/utils/cn';
 import { buildParticipantLabels, getCallTitle } from './consultation-participants';
+import { useConsultationSessionStore } from '@/stores/consultation-session.store';
 import { ConsultationCallLayout } from './ConsultationCallLayout';
 import { ConsultationCallControls } from './ConsultationCallControls';
+import { ConsultationLiveRecorder } from './ConsultationLiveRecorder';
 
 function CallHeader({
   callTitle,
@@ -114,15 +115,17 @@ export function ConsultationVideoRoom({
   onToggleSidePanel: () => void;
   onMinimize: () => void;
 }) {
-  const [isRecording, setIsRecording] = useState(false);
+  const recordingId = useConsultationSessionStore((s) => s.recordingId);
+  const isRecording = useConsultationSessionStore((s) => s.isRecording);
+  const setRecording = useConsultationSessionStore((s) => s.setRecording);
   const labels = buildParticipantLabels(appointment);
   const callTitle = getCallTitle(appointment);
 
   const startRecordingMutation = useMutation({
     mutationFn: () => consultationsApi.startRecording(appointment.id),
-    onSuccess: () => {
-      setIsRecording(true);
-      toast.success('Recording started');
+    onSuccess: (data) => {
+      setRecording(data.id);
+      toast.success('Live transcription started');
     },
     onError: () => toast.error('Failed to start recording'),
   });
@@ -130,8 +133,8 @@ export function ConsultationVideoRoom({
   const stopRecordingMutation = useMutation({
     mutationFn: () => consultationsApi.stopRecording(appointment.id),
     onSuccess: () => {
-      setIsRecording(false);
-      toast.success('Recording stopped');
+      setRecording(null);
+      toast.success('Recording stopped — generating summary');
     },
     onError: () => toast.error('Failed to stop recording'),
   });
@@ -155,6 +158,15 @@ export function ConsultationVideoRoom({
         recordingLoading={recordingLoading}
         onMinimize={onMinimize}
       />
+      {isDoctor && (
+        <ConsultationLiveRecorder
+          recordingId={recordingId}
+          active={isRecording}
+          onTranscript={({ fullText }) =>
+            useConsultationSessionStore.getState().setLiveTranscriptText(fullText)
+          }
+        />
+      )}
       <ConsultationCallLayout labels={labels} />
       <ConsultationCallControls />
       <ConnectionStateToast />

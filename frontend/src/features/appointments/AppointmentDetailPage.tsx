@@ -16,6 +16,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { UserRole } from '@/types';
 import { formatDateTime } from '@/utils/formatDate';
 import { cn } from '@/utils/cn';
+import { ConsultationTranscriptPanel } from '@/features/consultations/ConsultationTranscriptPanel';
 
 type Tab = 'overview' | 'transcript' | 'ai-outputs' | 'documents';
 
@@ -263,11 +264,10 @@ export function AppointmentDetailPage() {
         <Card>
           <CardHeader title="Consultation Transcript" />
           {transcript ? (
-            <div className="prose prose-sm max-w-none">
-              <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans leading-relaxed">
-                {transcript.content}
-              </pre>
-            </div>
+            <ConsultationTranscriptPanel
+              content={transcript.content}
+              segments={transcript.segments}
+            />
           ) : (
             <div className="text-center py-12">
               <FileText className="w-8 h-8 text-muted mx-auto mb-3" />

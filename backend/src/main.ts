@@ -1,9 +1,11 @@
+import { createServer } from 'http';
 import { validateEnv, env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { startWorkers, stopWorkers } from './jobs/index.js';
 import { createApp } from './app.js';
 import { disconnectAll } from './core/tenant-prisma.js';
 import { getCentralPrisma } from './core/tenant-registry.js';
+import { attachLiveTranscriptWs } from './modules/consultations/live-transcript.ws.js';
 
 async function bootstrap(): Promise<void> {
   validateEnv();
@@ -12,8 +14,10 @@ async function bootstrap(): Promise<void> {
   await startWorkers();
 
   const app = createApp();
+  const server = createServer(app);
+  attachLiveTranscriptWs(server);
 
-  const server = app.listen(env.PORT, () => {
+  server.listen(env.PORT, () => {
     logger.info(`Server running on port ${env.PORT}`);
   });
 
