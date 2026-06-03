@@ -4,6 +4,7 @@ import { Users } from 'lucide-react';
 import { ConsultationVideoTile } from './ConsultationVideoTile';
 import { ConsultationDraggablePip } from './ConsultationDraggablePip';
 import type { ParticipantLabelMap } from './consultation-participants';
+import { useVideoTrackDimensions, videoAspectRatio } from './useVideoTrackDimensions';
 
 export function ConsultationCallLayout({ labels }: { labels: ParticipantLabelMap }) {
   const participants = useParticipants();
@@ -16,6 +17,8 @@ export function ConsultationCallLayout({ labels }: { labels: ParticipantLabelMap
   const localTrack = cameraTracks.find((t) => t.participant.isLocal);
   const remoteTrack = cameraTracks.find((t) => !t.participant.isLocal);
   const remoteCount = participants.filter((p) => !p.isLocal).length;
+  const localDimensions = useVideoTrackDimensions(localTrack);
+  const localPipAspect = videoAspectRatio(localDimensions);
 
   return (
     <div className="consultation-stage relative flex-1 min-h-0 w-full bg-slate-950 overflow-hidden">
@@ -45,7 +48,7 @@ export function ConsultationCallLayout({ labels }: { labels: ParticipantLabelMap
       )}
 
       {localTrack && (
-        <ConsultationDraggablePip>
+        <ConsultationDraggablePip videoAspectRatio={localPipAspect}>
           <ConsultationVideoTile trackRef={localTrack} labels={labels} variant="pip" />
         </ConsultationDraggablePip>
       )}

@@ -24,18 +24,21 @@ export function ConsultationVideoTile({
   const isLocal = participant.isLocal;
   const pub = trackRef.publication;
   const hasVideo = Boolean(pub?.track && !pub.isMuted);
-
   return (
     <TrackRefContext.Provider value={trackRef}>
       <ParticipantContext.Provider value={participant}>
         <div
           className={cn(
-            'relative w-full h-full overflow-hidden bg-slate-900',
-            variant === 'main' ? 'rounded-none' : 'rounded-2xl'
+            'consultation-video-tile relative w-full h-full overflow-hidden bg-slate-950',
+            'flex items-center justify-center',
+            variant === 'main' ? 'consultation-tile-main rounded-none' : 'consultation-tile-pip rounded-2xl'
           )}
         >
           {hasVideo ? (
-            <VideoTrack trackRef={trackRef} className="w-full h-full object-cover" />
+            <VideoTrack
+              trackRef={trackRef}
+              className="consultation-video-element max-w-full max-h-full w-full h-full object-contain"
+            />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-slate-800 to-slate-950">
               <Avatar name={displayName} size={variant === 'main' ? 'xl' : 'md'} />

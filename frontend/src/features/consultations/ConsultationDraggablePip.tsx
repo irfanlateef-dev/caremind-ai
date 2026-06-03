@@ -14,11 +14,14 @@ const BOTTOM_SAFE = 128;
 
 interface ConsultationDraggablePipProps {
   children: ReactNode;
+  /** width ÷ height from the local camera track (updates on device rotation). */
+  videoAspectRatio?: number;
   className?: string;
 }
 
 export function ConsultationDraggablePip({
   children,
+  videoAspectRatio,
   className,
 }: ConsultationDraggablePipProps) {
   const boundsRef = useRef<HTMLDivElement>(null);
@@ -122,14 +125,15 @@ export function ConsultationDraggablePip({
         ref={pipRef}
         role="region"
         aria-label="Your video — drag to reposition"
-        style={
-          position
+        style={{
+          ...(position
             ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' }
-            : { right: PIP_MARGIN, bottom: BOTTOM_SAFE }
-        }
+            : { right: PIP_MARGIN, bottom: BOTTOM_SAFE }),
+          aspectRatio: videoAspectRatio ?? 3 / 4,
+        }}
         className={cn(
           'consultation-pip pointer-events-auto absolute z-20',
-          'w-28 sm:w-36 md:w-40 aspect-[3/4] rounded-2xl overflow-hidden',
+          'w-[min(42vw,10.5rem)] max-h-[min(38vh,15rem)] rounded-2xl overflow-hidden',
           'shadow-2xl ring-2 ring-white/20 border border-white/10 bg-slate-900',
           'touch-none select-none',
           dragging ? 'cursor-grabbing scale-[1.02]' : 'cursor-grab',
