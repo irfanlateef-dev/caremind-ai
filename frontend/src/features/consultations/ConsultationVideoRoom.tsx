@@ -3,15 +3,12 @@ import {
   Circle,
   ChevronRight,
   FileText,
+  Minimize2,
   PanelRightOpen,
 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import {
-  ConnectionStateToast,
-  RoomAudioRenderer,
-  StartMediaButton,
-} from '@livekit/components-react';
+import { ConnectionStateToast, StartMediaButton } from '@livekit/components-react';
 import { Button } from '@/components/ui';
 import { consultationsApi } from '@/api/consultations.api';
 import type { Appointment } from '@/types';
@@ -28,6 +25,7 @@ function CallHeader({
   onToggleSidePanel,
   onToggleRecording,
   recordingLoading,
+  onMinimize,
 }: {
   callTitle: string;
   isDoctor: boolean;
@@ -36,6 +34,7 @@ function CallHeader({
   onToggleSidePanel: () => void;
   onToggleRecording: () => void;
   recordingLoading: boolean;
+  onMinimize: () => void;
 }) {
   return (
     <header className="shrink-0 z-20 flex items-center justify-between gap-3 px-4 sm:px-5 py-3 bg-slate-950/90 backdrop-blur-md border-b border-white/5">
@@ -46,6 +45,16 @@ function CallHeader({
         <p className="text-sm sm:text-base font-medium text-white truncate">{callTitle}</p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={onMinimize}
+          className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+          aria-label="Minimize call to picture-in-picture"
+          title="Minimize — keep call active while you work elsewhere"
+        >
+          <Minimize2 className="w-4 h-4" />
+          <span className="hidden sm:inline">Minimize</span>
+        </button>
         {isDoctor && (
           <Button
             variant={isRecording ? 'danger' : 'outline'}
@@ -97,11 +106,13 @@ export function ConsultationVideoRoom({
   isDoctor,
   sidePanelOpen,
   onToggleSidePanel,
+  onMinimize,
 }: {
   appointment: Appointment;
   isDoctor: boolean;
   sidePanelOpen: boolean;
   onToggleSidePanel: () => void;
+  onMinimize: () => void;
 }) {
   const [isRecording, setIsRecording] = useState(false);
   const labels = buildParticipantLabels(appointment);
@@ -142,10 +153,10 @@ export function ConsultationVideoRoom({
             : startRecordingMutation.mutate()
         }
         recordingLoading={recordingLoading}
+        onMinimize={onMinimize}
       />
       <ConsultationCallLayout labels={labels} />
       <ConsultationCallControls />
-      <RoomAudioRenderer />
       <ConnectionStateToast />
       <StartMediaButton className="sr-only" />
     </div>

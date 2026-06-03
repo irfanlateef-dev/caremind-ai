@@ -10,12 +10,15 @@ interface ConsultationMediaControlProps {
   source: Track.Source.Microphone | Track.Source.Camera;
   deviceKind: MediaKind;
   label: string;
+  /** Smaller toggle-only control for the floating minimized call window. */
+  compact?: boolean;
 }
 
 export function ConsultationMediaControl({
   source,
   deviceKind,
   label,
+  compact = false,
 }: ConsultationMediaControlProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -38,6 +41,24 @@ export function ConsultationMediaControl({
 
   const isMic = source === Track.Source.Microphone;
   const Icon = isMic ? (enabled ? Mic : MicOff) : enabled ? Video : VideoOff;
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        {...buttonProps}
+        aria-label={enabled ? `Turn off ${label.toLowerCase()}` : `Turn on ${label.toLowerCase()}`}
+        className={cn(
+          'flex items-center justify-center w-10 h-10 rounded-xl border border-white/15 transition-colors',
+          enabled
+            ? 'bg-white/10 text-white hover:bg-white/15'
+            : 'text-red-200 bg-red-500/25 hover:bg-red-500/35'
+        )}
+      >
+        <Icon className="w-4 h-4" />
+      </button>
+    );
+  }
 
   return (
     <div ref={rootRef} className="relative">
