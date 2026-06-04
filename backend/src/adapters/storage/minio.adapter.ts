@@ -9,15 +9,15 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Readable } from 'stream';
 import { env } from '../../config/env.js';
+import { resolveS3Connection } from '../../config/s3-endpoint.js';
 import type { StorageAdapter } from '../../types/adapters.js';
 import { AppError } from '../../core/errors.js';
 
 function createS3Client(): S3Client {
-  const endpoint =
-    `${env.MINIO_USE_SSL ? 'https' : 'http'}://${env.MINIO_ENDPOINT}:${env.MINIO_PORT}`;
+  const { endpointUrl } = resolveS3Connection(env);
 
   return new S3Client({
-    endpoint,
+    endpoint: endpointUrl,
     region: 'us-east-1',
     credentials: {
       accessKeyId: env.MINIO_ACCESS_KEY,
@@ -68,8 +68,9 @@ export function createMinioAdapter(): StorageAdapter {
         }),
       );
 
+      const { endpointUrl } = resolveS3Connection(env);
       return {
-        url: `${env.MINIO_USE_SSL ? 'https' : 'http'}://${env.MINIO_ENDPOINT}:${env.MINIO_PORT}/${bucket}/${key}`,
+        url: `${endpointUrl}/${bucket}/${key}`,
       };
     },
 

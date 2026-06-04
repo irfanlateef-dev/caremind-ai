@@ -20,6 +20,7 @@ export interface AuthMeResponse {
   lastName?: string;
   name?: string;
   mfaEnabled: boolean;
+  mfaEligible?: boolean;
   lastLogin?: string | null;
   createdAt?: string;
 }
@@ -34,6 +35,7 @@ function mapMeToUser(data: AuthMeResponse): User {
     lastName: data.lastName,
     name: data.name,
     mfaEnabled: data.mfaEnabled,
+    mfaEligible: data.mfaEligible ?? true,
     lastLogin: data.lastLogin ?? undefined,
     createdAt: data.createdAt,
   };

@@ -58,6 +58,8 @@ export interface User {
   lastName?: string;
   name?: string;
   mfaEnabled?: boolean;
+  /** False for @demo.clinic seed accounts — MFA cannot be enabled. */
+  mfaEligible?: boolean;
   lastLogin?: string;
   createdAt?: string;
   patientProfileId?: string;

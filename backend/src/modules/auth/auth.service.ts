@@ -35,6 +35,7 @@ import {
   trustedDeviceExpiresAt,
 } from './auth.session.js';
 import { deviceNameFromUserAgent, hashDeviceId } from './auth.device.js';
+import { isDemoAccountEmail } from '../../core/demo-users.js';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -125,7 +126,7 @@ export async function login(input: LoginInput, userAgent?: string) {
 
   const role = user.role as 'patient' | 'doctor' | 'admin';
 
-  if (user.mfaEnabled) {
+  if (user.mfaEnabled && !isDemoAccountEmail(user.email)) {
     const trusted = await isDeviceTrusted(central, user.id, ctx.deviceId);
     if (!trusted) {
       const tempToken = issueAccessToken({
@@ -157,6 +158,9 @@ export async function verifyMfa(input: MfaVerifyInput, userAgent?: string) {
 
   const user = await repo.findUserById(central, userId);
   if (!user || !user.mfaSecret) throw new AuthError('MFA not configured');
+  if (isDemoAccountEmail(user.email)) {
+    throw new ValidationError('Two-factor authentication is not available for demo accounts');
+  }
 
   const valid = authenticator.verify({ token: input.code, secret: user.mfaSecret });
   if (!valid) throw new ValidationError('Invalid MFA code');
@@ -180,6 +184,9 @@ export async function registerTrustedDevice(
   const central = getCentralPrisma();
   const user = await repo.findUserById(central, userId);
   if (!user || user.deletedAt) throw new NotFoundError('User not found');
+  if (isDemoAccountEmail(user.email)) {
+    throw new ValidationError('Two-factor authentication is not available for demo accounts');
+  }
   if (!user.mfaEnabled) {
     throw new ValidationError('Two-factor authentication must be enabled to trust a device');
   }
@@ -192,6 +199,9 @@ export async function setupMfa(userId: string) {
   const central = getCentralPrisma();
   const user = await repo.findUserById(central, userId);
   if (!user) throw new NotFoundError('User not found');
+  if (isDemoAccountEmail(user.email)) {
+    throw new ValidationError('Two-factor authentication is not available for demo accounts');
+  }
 
   const secret = authenticator.generateSecret();
   const otpAuthUrl = authenticator.keyuri(user.email, 'CareMind AI', secret);
@@ -205,6 +215,9 @@ export async function confirmMfaSetup(userId: string, code: string) {
   const central = getCentralPrisma();
   const user = await repo.findUserById(central, userId);
   if (!user || !user.mfaSecret) throw new AuthError('MFA setup not initiated');
+  if (isDemoAccountEmail(user.email)) {
+    throw new ValidationError('Two-factor authentication is not available for demo accounts');
+  }
 
   const valid = authenticator.verify({ token: code, secret: user.mfaSecret });
   if (!valid) throw new ValidationError('Invalid MFA code');

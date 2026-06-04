@@ -16,6 +16,7 @@ import { getUserDisplayName } from '@/utils/display-name';
 import { hydrateAuthProfileAfterLogin } from '@/hooks/useAuthProfile';
 import { formatDateTime } from '@/utils/formatDate';
 import type { TrustedDevice } from '@/types';
+import { DEMO_EMAIL_DOMAIN, isDemoAccountEmail } from '@/constants/demo-accounts';
 
 const passwordSchema = z
   .object({
@@ -38,6 +39,8 @@ export function ProfilePage() {
   const [setupStep, setSetupStep] = useState<'qr' | 'verify'>('qr');
 
   const displayName = getUserDisplayName(user);
+  const mfaEligible =
+    user?.mfaEligible !== false && !isDemoAccountEmail(user?.email ?? '');
 
   const {
     register,
@@ -68,7 +71,7 @@ export function ProfilePage() {
   const trustedDevicesQuery = useQuery({
     queryKey: ['auth', 'trusted-devices'],
     queryFn: authApi.listTrustedDevices,
-    enabled: Boolean(user?.mfaEnabled),
+    enabled: Boolean(user?.mfaEnabled) && mfaEligible,
   });
 
   const revokeDeviceMutation = useMutation({
@@ -140,12 +143,16 @@ export function ProfilePage() {
         <CardHeader
           title="Two-Factor Authentication"
           subtitle={
-            user?.mfaEnabled
-              ? 'Your account is protected with MFA.'
-              : 'Add an extra layer of security to your account.'
+            !mfaEligible
+              ? 'Not available for demo clinic accounts.'
+              : user?.mfaEnabled
+                ? 'Your account is protected with MFA.'
+                : 'Add an extra layer of security to your account.'
           }
           action={
-            user?.mfaEnabled ? (
+            !mfaEligible ? (
+              <Badge variant="gray">Unavailable</Badge>
+            ) : user?.mfaEnabled ? (
               <Badge variant="success">
                 <ShieldCheck className="w-3.5 h-3.5 mr-1" />
                 Enabled
@@ -159,7 +166,13 @@ export function ProfilePage() {
           }
         />
 
-        {!user?.mfaEnabled && (
+        {!mfaEligible && (
+          <p className="text-sm text-muted">
+            {`Accounts ending in @${DEMO_EMAIL_DOMAIN} are for demonstration only and cannot enable two-factor authentication.`}
+          </p>
+        )}
+
+        {mfaEligible && !user?.mfaEnabled && (
           <>
             {!mfaSetupOpen ? (
               <Button
@@ -262,7 +275,7 @@ export function ProfilePage() {
           </>
         )}
 
-        {user?.mfaEnabled && (
+        {mfaEligible && user?.mfaEnabled && (
           <div className="flex items-center gap-2 text-sm text-success-700 bg-success-50 rounded-md p-3">
             <ShieldCheck className="w-4 h-4 flex-shrink-0" />
             Two-factor authentication is active and protecting your account.
@@ -270,7 +283,7 @@ export function ProfilePage() {
         )}
       </Card>
 
-      {user?.mfaEnabled && (
+      {mfaEligible && user?.mfaEnabled && (
         <Card className="mb-6">
           <CardHeader
             title="Trusted Devices"

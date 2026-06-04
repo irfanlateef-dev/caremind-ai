@@ -1,0 +1,11 @@
+# Local / Mac: use when divescale main stack is NOT running.
+# Creates divescale-net locally so backend + frontend can start.
+#
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.prod.local.yml up -d --build
+#
+# On the server: do NOT use this file — start divescale compose first (creates divescale-net), then prod only.
+
+networks:
+  divescale-net:
+    external: false
+    name: divescale-net

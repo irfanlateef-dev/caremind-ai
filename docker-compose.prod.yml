@@ -1,0 +1,118 @@
+# CareMind production stack (5 services: 2× Postgres, Redis, backend, frontend).
+#
+# SERVER (divescale nginx already running — network divescale-net must exist):
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#
+# LOCAL Mac (no divescale stack): also add docker-compose.prod.local.yml OR:
+#   docker network create divescale-net
+#
+# Compose reads .env in project root automatically; --env-file .env.prod is explicit.
+# After first up: migrations + seed inside backend container (see README).
+
+
+services:
+  postgres-central:
+    image: pgvector/pgvector:pg16
+    container_name: caremind-postgres-central
+    restart: unless-stopped
+    networks:
+      - caremind-internal
+    environment:
+      POSTGRES_USER: ${CENTRAL_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${CENTRAL_DB_PASSWORD:?CENTRAL_DB_PASSWORD required}
+      POSTGRES_DB: ${CENTRAL_DB_NAME:-caremind_central}
+    volumes:
+      - postgres-central-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${CENTRAL_DB_USER:-postgres}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-tenant-template:
+    image: pgvector/pgvector:pg16
+    container_name: caremind-postgres-tenant
+    restart: unless-stopped
+    networks:
+      - caremind-internal
+    environment:
+      POSTGRES_USER: ${TENANT_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${TENANT_DB_PASSWORD:?TENANT_DB_PASSWORD required}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-tenant-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${TENANT_DB_USER:-postgres}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: caremind-redis
+    restart: unless-stopped
+    networks:
+      - caremind-internal
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: caremind-backend
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+      - .env
+    environment:
+      NODE_ENV: production
+      CENTRAL_DB_HOST: postgres-central
+      CENTRAL_DB_PORT: '5432'
+      TENANT_DB_HOST: postgres-tenant-template
+      TENANT_DB_PORT: '5432'
+      REDIS_URL: redis://redis:6379
+      NODE_OPTIONS: --max-old-space-size=6144
+    networks:
+      - caremind-internal
+      - divescale-net
+    depends_on:
+      postgres-central:
+        condition: service_healthy
+      postgres-tenant-template:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL:?VITE_LIVEKIT_URL is required}
+    container_name: caremind-web
+    restart: unless-stopped
+    networks:
+      - divescale-net
+    depends_on:
+      - backend
+
+networks:
+  caremind-internal:
+    driver: bridge
+  # Same network as divescale nginx / website / cms / minio (created by main divescale compose)
+  divescale-net:
+    external: true
+    name: divescale-net
+
+volumes:
+  postgres-central-data:
+  postgres-tenant-data:
+  redis-data:

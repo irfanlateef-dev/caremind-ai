@@ -2,6 +2,7 @@ import type { PrismaClient as CentralPrisma } from '../../../node_modules/.prism
 import type { PrismaClient as TenantPrisma } from '../../../node_modules/.prisma/tenant-client/index.js';
 import * as repo from './auth.repository.js';
 import { NotFoundError } from '../../core/errors.js';
+import { isDemoAccountEmail } from '../../core/demo-users.js';
 
 function displayNameFromEmail(email: string): string {
   const local = email.split('@')[0] ?? '';
@@ -54,6 +55,7 @@ export async function resolveUserProfile(
     lastName,
     name: name ?? displayNameFromEmail(user.email),
     mfaEnabled: user.mfaEnabled,
+    mfaEligible: !isDemoAccountEmail(user.email),
     lastLogin: user.lastLoginAt?.toISOString() ?? null,
     createdAt: user.createdAt.toISOString(),
   };

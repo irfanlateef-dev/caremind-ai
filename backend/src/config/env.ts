@@ -26,12 +26,18 @@ const envSchema = z
     // Redis
     REDIS_URL: z.string().url(),
 
-    // MinIO
-    MINIO_ENDPOINT: z.string().min(1),
+    // Object storage — production: single S3_ENDPOINT + AWS_* ; dev: MINIO_* (see backend/.env.example)
+    S3_ENDPOINT: z.string().url().optional(),
+    MINIO_ENDPOINT: z.string().min(1).optional(),
     MINIO_PORT: z.coerce.number().default(9000),
-    MINIO_ACCESS_KEY: z.string().min(1),
-    MINIO_SECRET_KEY: z.string().min(1),
-    MINIO_USE_SSL: z.string().transform((v) => v === 'true').default('false'),
+    MINIO_ACCESS_KEY: z.string().min(1).optional(),
+    MINIO_SECRET_KEY: z.string().min(1).optional(),
+    AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
+    AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    MINIO_USE_SSL: z
+      .string()
+      .transform((v) => v === 'true')
+      .default('false'),
 
     // Auth — see .env.example for JWT vs refresh token explanation
     JWT_SECRET: z.string().min(32),
@@ -72,6 +78,33 @@ const envSchema = z
     FRONTEND_URL: z.string().url(),
   })
   .superRefine((data, ctx) => {
+    if (!data.S3_ENDPOINT) {
+      if (!data.MINIO_ENDPOINT?.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['MINIO_ENDPOINT'],
+          message: 'MINIO_ENDPOINT is required when S3_ENDPOINT is not set (local MinIO)',
+        });
+      }
+    }
+
+    const accessKey = data.MINIO_ACCESS_KEY ?? data.AWS_ACCESS_KEY_ID;
+    const secretKey = data.MINIO_SECRET_KEY ?? data.AWS_SECRET_ACCESS_KEY;
+    if (!accessKey?.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MINIO_ACCESS_KEY'],
+        message: 'Set MINIO_ACCESS_KEY or AWS_ACCESS_KEY_ID',
+      });
+    }
+    if (!secretKey?.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MINIO_SECRET_KEY'],
+        message: 'Set MINIO_SECRET_KEY or AWS_SECRET_ACCESS_KEY',
+      });
+    }
+
     if (data.EMAIL_PROVIDER === 'resend') {
       if (!data.RESEND_API_KEY?.length) {
         ctx.addIssue({
@@ -101,8 +134,13 @@ const envSchema = z
 
 type EnvInput = z.infer<typeof envSchema>;
 
-export type Env = EnvInput & {
+export type Env = Omit<
+  EnvInput,
+  'MINIO_ACCESS_KEY' | 'MINIO_SECRET_KEY' | 'AWS_ACCESS_KEY_ID' | 'AWS_SECRET_ACCESS_KEY'
+> & {
   CENTRAL_DATABASE_URL: string;
+  MINIO_ACCESS_KEY: string;
+  MINIO_SECRET_KEY: string;
 };
 
 let _env: Env;
@@ -126,7 +164,15 @@ export function validateEnv(): Env {
 
   process.env['CENTRAL_DATABASE_URL'] = centralDatabaseUrl;
 
-  _env = { ...result.data, CENTRAL_DATABASE_URL: centralDatabaseUrl };
+  const accessKey = result.data.MINIO_ACCESS_KEY ?? result.data.AWS_ACCESS_KEY_ID ?? '';
+  const secretKey = result.data.MINIO_SECRET_KEY ?? result.data.AWS_SECRET_ACCESS_KEY ?? '';
+
+  _env = {
+    ...result.data,
+    MINIO_ACCESS_KEY: accessKey,
+    MINIO_SECRET_KEY: secretKey,
+    CENTRAL_DATABASE_URL: centralDatabaseUrl,
+  };
   return _env;
 }
 
