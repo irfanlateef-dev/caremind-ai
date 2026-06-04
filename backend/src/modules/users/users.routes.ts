@@ -78,7 +78,7 @@ usersRoutes.get(
 
 usersRoutes.delete(
   '/:id',
-  requireRole('admin'),
+  requireRole('admin', 'doctor'),
   asyncHandler(async (req, res) => {
     await service.deleteUser(req.auth, req.tenantPrisma, req.params['id']!);
     res.json({

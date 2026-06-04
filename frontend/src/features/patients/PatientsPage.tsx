@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Avatar } from '@/components/ui/Avatar';
+import { getApiErrorMessage } from '@/api/errors';
 import { patientsApi, patientKeys, GENDER_OPTIONS, formatGender } from '@/api/patients.api';
 import { usersApi, userKeys } from '@/api/users.api';
 import { PatientGender } from '@/types';
@@ -41,6 +42,7 @@ export function PatientsPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState<{ userId: string; name: string } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: patientKeys.list({ page, pageSize: 20 }),
@@ -51,6 +53,17 @@ export function PatientsPage() {
   const form = useForm<InvitePatientValues>({
     resolver: zodResolver(invitePatientSchema),
     defaultValues: { gender: PatientGender.MALE },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: usersApi.delete,
+    onSuccess: () => {
+      toast.success('Patient removed');
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: patientKeys.all });
+      queryClient.invalidateQueries({ queryKey: userKeys.all });
+    },
+    onError: (err: unknown) => toast.error(getApiErrorMessage(err, 'Failed to remove patient')),
   });
 
   const inviteMutation = useMutation({
@@ -106,13 +119,14 @@ export function PatientsPage() {
                   <th className="text-left px-4 py-3 font-semibold text-slate-700">Email</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-700">DOB</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-700">Sessions</th>
+                  <th className="text-right px-4 py-3 font-semibold text-slate-700">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading ? (
                   Array.from({ length: 6 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 5 }).map((_, j) => (
+                      {Array.from({ length: 6 }).map((_, j) => (
                         <td key={j} className="px-4 py-3">
                           <Skeleton className="h-4 w-full" />
                         </td>
@@ -121,7 +135,7 @@ export function PatientsPage() {
                   ))
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12">
+                    <td colSpan={6} className="py-12">
                       <EmptyState title="No patients found" description="Invite a patient to get started." />
                     </td>
                   </tr>
@@ -146,6 +160,22 @@ export function PatientsPage() {
                         {p.dateOfBirth ? formatDate(p.dateOfBirth) : '—'}
                       </td>
                       <td className="px-4 py-3 text-slate-700">{p.sessionCount ?? 0}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteTarget({
+                              userId: p.userId,
+                              name: `${p.firstName} ${p.lastName}`.trim(),
+                            });
+                          }}
+                          className="p-2 text-muted hover:text-danger hover:bg-danger-50 rounded-md transition-colors"
+                          aria-label={`Remove ${p.firstName} ${p.lastName}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -183,6 +213,20 @@ export function PatientsPage() {
                     {formatGender(p.gender)} · {p.sessionCount ?? 0} sessions
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget({
+                      userId: p.userId,
+                      name: `${p.firstName} ${p.lastName}`.trim(),
+                    });
+                  }}
+                  className="p-2 text-muted hover:text-danger"
+                  aria-label="Remove patient"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </Card>
           ))
@@ -192,6 +236,27 @@ export function PatientsPage() {
       {data && data.totalPages > 1 && (
         <Pagination page={page} totalPages={data.totalPages} onPageChange={setPage} />
       )}
+
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Remove Patient"
+        size="sm"
+      >
+        <p className="text-sm text-slate-700">
+          Remove <strong>{deleteTarget?.name}</strong>? They will lose access to the portal. This cannot be undone.
+        </p>
+        <ModalFooter>
+          <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+          <Button
+            variant="danger"
+            loading={deleteMutation.isPending}
+            onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.userId)}
+          >
+            Remove Patient
+          </Button>
+        </ModalFooter>
+      </Modal>
 
       <Modal open={inviteOpen} onClose={() => { setInviteOpen(false); form.reset({ gender: PatientGender.MALE }); }} title="Add Patient">
         <form

@@ -1,28 +1,46 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Calendar, Mail, Phone, User } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Calendar, Mail, Phone, Trash2, User } from 'lucide-react';
+import toast from 'react-hot-toast';
 import {
   Button,
   Card,
   CardHeader,
   EmptyState,
+  Modal,
+  ModalFooter,
   Pagination,
   Skeleton,
 } from '@/components/ui';
 import { AppointmentStatusBadge } from '@/components/shared/StatusBadge';
+import { getApiErrorMessage } from '@/api/errors';
 import { patientsApi, patientKeys, formatGender } from '@/api/patients.api';
+import { usersApi, userKeys } from '@/api/users.api';
 import { formatDate, formatDateTime } from '@/utils/formatDate';
 
 export function PatientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [sessionsPage, setSessionsPage] = useState(1);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data: patient, isLoading } = useQuery({
     queryKey: patientKeys.detail(id!),
     queryFn: () => patientsApi.get(id!),
     enabled: !!id,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: usersApi.delete,
+    onSuccess: () => {
+      toast.success('Patient removed');
+      queryClient.invalidateQueries({ queryKey: patientKeys.all });
+      queryClient.invalidateQueries({ queryKey: userKeys.all });
+      navigate('/patients', { replace: true });
+    },
+    onError: (err: unknown) => toast.error(getApiErrorMessage(err, 'Failed to remove patient')),
   });
 
   const { data: sessions, isLoading: sessionsLoading } = useQuery({
@@ -60,11 +78,21 @@ export function PatientDetailPage() {
         </Button>
       </div>
 
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">
-          {patient.firstName} {patient.lastName}
-        </h1>
-        <p className="text-muted mt-1">{patient.sessionCount ?? 0} total sessions</p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">
+            {patient.firstName} {patient.lastName}
+          </h1>
+          <p className="text-muted mt-1">{patient.sessionCount ?? 0} total sessions</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          leftIcon={<Trash2 className="w-4 h-4" />}
+          onClick={() => setConfirmDelete(true)}
+        >
+          Remove Patient
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -171,6 +199,22 @@ export function PatientDetailPage() {
           </div>
         )}
       </Card>
+
+      <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Remove Patient" size="sm">
+        <p className="text-sm text-slate-700">
+          Remove <strong>{patient.firstName} {patient.lastName}</strong>? They will lose access to the portal.
+        </p>
+        <ModalFooter>
+          <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button
+            variant="danger"
+            loading={deleteMutation.isPending}
+            onClick={() => patient.userId && deleteMutation.mutate(patient.userId)}
+          >
+            Remove Patient
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

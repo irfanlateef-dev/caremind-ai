@@ -6,7 +6,7 @@ import type { PrismaClient as TenantPrisma } from '../../../node_modules/.prisma
 import * as repo from './users.repository.js';
 import { getEmailAdapter } from '../../adapters/email/index.js';
 import { auditLog } from '../../core/audit-logger.js';
-import { ConflictError, ForbiddenError } from '../../core/errors.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../core/errors.js';
 import type { AuthContext } from '../../types/auth.js';
 import type { InviteDoctorInput, InvitePatientInput } from './users.schema.js';
 
@@ -254,11 +254,39 @@ export async function deleteUser(
   tenantPrisma: TenantPrisma,
   targetUserId: string,
 ) {
+  if (targetUserId === auth.userId) {
+    throw new ForbiddenError('Cannot delete your own account');
+  }
+
   const central = getCentralPrisma();
   const user = await central.user.findUnique({
     where: { id: targetUserId },
-    select: { role: true },
+    select: { role: true, orgId: true, deletedAt: true },
   });
+
+  if (!user || user.orgId !== auth.orgId || user.deletedAt) {
+    throw new NotFoundError('User not found');
+  }
+  if (user.role === 'admin') {
+    throw new ForbiddenError('Cannot delete admin accounts');
+  }
+
+  if (auth.role === 'doctor') {
+    if (user.role !== 'patient') {
+      throw new ForbiddenError('Doctors can only remove patient accounts');
+    }
+    const doctor = await repo.findDoctorByUserId(tenantPrisma, auth.userId);
+    if (!doctor || doctor.orgId !== auth.orgId || doctor.deletedAt) {
+      throw new ForbiddenError('Doctor profile not found');
+    }
+    const patient = await repo.findPatientByUserId(tenantPrisma, targetUserId);
+    if (!patient || patient.orgId !== auth.orgId || patient.deletedAt) {
+      throw new NotFoundError('Patient not found');
+    }
+    if (patient.primaryDoctorId !== doctor.id) {
+      throw new ForbiddenError('You can only remove patients assigned to you');
+    }
+  }
 
   await repo.softDeleteUser(central, targetUserId);
 
