@@ -26,5 +26,8 @@ export const ALLOWED_MIME_TYPES = [
   'image/png',
 ] as const;
 
+/** Max files per upload request (each file still ≤ 20MB). */
+export const MAX_FILES_PER_UPLOAD = 20;
+
 export type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
 export type UploadDocumentInput = z.infer<typeof uploadDocumentSchema>;

@@ -6,11 +6,19 @@ import { getStorageAdapter } from '../../adapters/storage/index.js';
 import { documentQueue } from '../../jobs/queue.js';
 import { auditLog } from '../../core/audit-logger.js';
 import { getTenantDbUrl } from '../../core/tenant-registry.js';
-import { ForbiddenError, NotFoundError, ValidationError } from '../../core/errors.js';
+import { AppError, ForbiddenError, NotFoundError, ValidationError } from '../../core/errors.js';
 import type { AuthContext } from '../../types/auth.js';
-import { ALLOWED_MIME_TYPES, type UploadDocumentInput } from './documents.schema.js';
-
+import {
+  ALLOWED_MIME_TYPES,
+  MAX_FILES_PER_UPLOAD,
+  type UploadDocumentInput,
+} from './documents.schema.js';
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+
+export type UploadDocumentsResult = {
+  documents: Awaited<ReturnType<typeof uploadDocument>>[];
+  failed: { fileName: string; message: string }[];
+};
 
 type LinkedAppointment = { id: string; scheduledAt: Date };
 
@@ -142,6 +150,45 @@ export async function uploadDocument(
     createdAt: document.createdAt.toISOString(),
     appointment: null,
   };
+}
+
+export async function uploadDocuments(
+  auth: AuthContext,
+  tenantPrisma: PrismaClient,
+  files: Express.Multer.File[],
+  input: UploadDocumentInput,
+): Promise<UploadDocumentsResult> {
+  if (!files.length) {
+    throw new ValidationError('At least one file is required');
+  }
+  if (files.length > MAX_FILES_PER_UPLOAD) {
+    throw new ValidationError(`You can upload up to ${MAX_FILES_PER_UPLOAD} files at once`);
+  }
+
+  const documents: UploadDocumentsResult['documents'] = [];
+  const failed: UploadDocumentsResult['failed'] = [];
+
+  for (const file of files) {
+    try {
+      const doc = await uploadDocument(auth, tenantPrisma, file, input);
+      documents.push(doc);
+    } catch (err: unknown) {
+      const message =
+        err instanceof AppError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Upload failed';
+      failed.push({ fileName: file.originalname, message });
+    }
+  }
+
+  if (!documents.length) {
+    const detail = failed.map((f) => `${f.fileName}: ${f.message}`).join('; ');
+    throw new ValidationError(detail || 'All uploads failed');
+  }
+
+  return { documents, failed };
 }
 
 export async function listDocuments(

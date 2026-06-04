@@ -18,10 +18,15 @@ interface BackendDocumentsPage {
 }
 
 export interface UploadDocumentPayload {
-  file: File;
+  files: File[];
   patientId: string;
   appointmentId?: string;
   documentType?: string;
+}
+
+export interface UploadDocumentsResult {
+  documents: Document[];
+  failed: { fileName: string; message: string }[];
 }
 
 export const documentsApi = {
@@ -43,15 +48,24 @@ export const documentsApi = {
     return mapDocument(unwrap(res) as Record<string, unknown>);
   },
 
-  upload: async (payload: UploadDocumentPayload): Promise<Document> => {
+  upload: async (payload: UploadDocumentPayload): Promise<UploadDocumentsResult> => {
     const formData = new FormData();
-    formData.append('file', payload.file);
+    for (const file of payload.files) {
+      formData.append('files', file);
+    }
     formData.append('patientId', payload.patientId);
     if (payload.appointmentId) formData.append('appointmentId', payload.appointmentId);
     if (payload.documentType) formData.append('documentType', payload.documentType);
 
     const res = await apiClient.post('/api/documents/upload', formData);
-    return mapDocument(unwrap(res) as Record<string, unknown>);
+    const data = unwrap(res) as {
+      documents: Record<string, unknown>[];
+      failed: { fileName: string; message: string }[];
+    };
+    return {
+      documents: (data.documents ?? []).map(mapDocument),
+      failed: data.failed ?? [],
+    };
   },
 
   delete: async (id: string): Promise<void> => {

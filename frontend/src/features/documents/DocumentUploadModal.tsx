@@ -64,14 +64,24 @@ export function DocumentUploadModal({
       const appointmentId =
         fixedAppointmentId || (values.appointmentId?.trim() ? values.appointmentId : undefined);
       return documentsApi.upload({
-        file: selectedFiles[0],
+        files: selectedFiles,
         patientId,
         appointmentId,
         documentType: values.documentType,
       });
     },
-    onSuccess: () => {
-      toast.success('Document uploaded — processing in background');
+    onSuccess: (result) => {
+      const n = result.documents.length;
+      const failed = result.failed.length;
+      if (failed > 0) {
+        toast.success(
+          `${n} file${n === 1 ? '' : 's'} uploaded — ${failed} failed. Processing in background.`,
+        );
+      } else {
+        toast.success(
+          `${n} file${n === 1 ? '' : 's'} uploaded — processing in background`,
+        );
+      }
       handleClose();
       queryClient.invalidateQueries({ queryKey: documentKeys.all });
       onSuccess?.();
@@ -93,7 +103,7 @@ export function DocumentUploadModal({
   const showAppointmentSelect = !fixedAppointmentId && appointmentOptions.length > 0;
 
   return (
-    <Modal open={open} onClose={handleClose} title="Upload Document">
+    <Modal open={open} onClose={handleClose} title="Upload Documents">
       <form
         onSubmit={handleSubmit((v) => {
           if (!selectedFiles.length) {
@@ -108,6 +118,7 @@ export function DocumentUploadModal({
           onFilesSelected={setSelectedFiles}
           accept=".pdf,.jpg,.jpeg,.png"
           maxSizeMB={20}
+          multiple
         />
         {showPatientSelect && (
           <Select
@@ -137,7 +148,7 @@ export function DocumentUploadModal({
             Cancel
           </Button>
           <Button type="submit" loading={uploadMutation.isPending} disabled={!selectedFiles.length}>
-            Upload
+            Upload{selectedFiles.length > 1 ? ` (${selectedFiles.length})` : ''}
           </Button>
         </ModalFooter>
       </form>

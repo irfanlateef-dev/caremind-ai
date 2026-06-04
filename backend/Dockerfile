@@ -14,8 +14,12 @@ RUN npm ci
 
 COPY src ./src/
 
-RUN npm run prisma:central:generate && \
-    npm run prisma:tenant:generate && \
+# Prisma generate only needs env vars present in schema; no DB connection at build time.
+ENV CENTRAL_DATABASE_URL="postgresql://build:build@127.0.0.1:5432/caremind_central"
+ENV TENANT_DATABASE_URL="postgresql://build:build@127.0.0.1:5433/caremind_tenant_build"
+
+RUN npx prisma generate --schema=prisma/central/schema.prisma && \
+    npx prisma generate --schema=prisma/tenant/schema.prisma && \
     npm run build
 
 # ─── Production image ─────────────────────────────────────────────────────

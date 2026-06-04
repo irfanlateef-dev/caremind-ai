@@ -4,7 +4,11 @@ import { asyncHandler } from '../../core/async-handler.js';
 import { validate } from '../../lib/middleware/validate.middleware.js';
 import { uploadRateLimiter } from '../../lib/middleware/rate-limit.middleware.js';
 import * as service from './documents.service.js';
-import { listDocumentsSchema, uploadDocumentSchema } from './documents.schema.js';
+import {
+  listDocumentsSchema,
+  MAX_FILES_PER_UPLOAD,
+  uploadDocumentSchema,
+} from './documents.schema.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export const documentRoutes = Router();
@@ -17,14 +21,17 @@ const upload = multer({
 documentRoutes.post(
   '/upload',
   uploadRateLimiter,
-  upload.single('file'),
+  upload.array('files', MAX_FILES_PER_UPLOAD),
   validate({ body: uploadDocumentSchema }),
   asyncHandler(async (req, res) => {
-    if (!req.file) {
-      res.status(400).json({ error: { code: 'MISSING_FILE', message: 'No file provided' } });
+    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    if (!files.length) {
+      res.status(400).json({
+        error: { code: 'MISSING_FILE', message: 'No files provided (use form field "files")' },
+      });
       return;
     }
-    const result = await service.uploadDocument(req.auth, req.tenantPrisma, req.file, req.body);
+    const result = await service.uploadDocuments(req.auth, req.tenantPrisma, files, req.body);
     res.status(201).json({
       data: result,
       meta: { requestId: uuidv4(), timestamp: new Date().toISOString() },
