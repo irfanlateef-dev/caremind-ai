@@ -1,11 +1,13 @@
 import { apiClient, unwrap } from './client';
 import {
   listQueryParams,
+  mapAdminDashboard,
   mapAuditLog,
-  mapDashboardStats,
   toPaginatedResponse,
 } from './mappers';
-import type { AuditLog, DashboardStats, PaginatedResponse } from '@/types';
+import type { AdminDashboardData, AuditLog, PaginatedResponse } from '@/types';
+import type { AdminDateRangeParams } from '@/features/admin/admin-date-range';
+import { buildAdminDateQueryParams } from '@/features/admin/admin-date-range';
 
 export interface ListAuditLogsParams {
   userId?: string;
@@ -42,16 +44,12 @@ interface BackendAuditLogsPage {
 
 export const adminApi = {
   /** GET /api/admin/dashboard */
-  getDashboard: async (): Promise<DashboardStats> => {
-    const res = await apiClient.get('/api/admin/dashboard');
-    const raw = unwrap(res) as {
-      totalUsers: number;
-      doctors: number;
-      patients: number;
-      appointments: number;
-      documents: number;
-    };
-    return mapDashboardStats(raw);
+  getDashboard: async (range: AdminDateRangeParams): Promise<AdminDashboardData> => {
+    const res = await apiClient.get('/api/admin/dashboard', {
+      params: buildAdminDateQueryParams(range),
+    });
+    const raw = unwrap(res) as Parameters<typeof mapAdminDashboard>[0];
+    return mapAdminDashboard(raw);
   },
 
   /** GET /api/admin/activity — recent audit log entries */
@@ -78,7 +76,7 @@ export const adminApi = {
 
 export const adminKeys = {
   all: ['admin'] as const,
-  dashboard: ['admin', 'dashboard'] as const,
+  dashboard: (range: AdminDateRangeParams) => ['admin', 'dashboard', range] as const,
   activity: ['admin', 'activity'] as const,
   auditLogs: ['admin', 'audit-logs'] as const,
   auditLogsList: (params?: ListAuditLogsParams) => ['admin', 'audit-logs', 'list', params] as const,

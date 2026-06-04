@@ -3,7 +3,7 @@ import type {
   AiOutput,
   Appointment,
   AuditLog,
-  DashboardStats,
+  AdminDashboardData,
   Document,
   PaginatedResponse,
   User,
@@ -36,21 +36,23 @@ export function listQueryParams(
   return out;
 }
 
-export function mapDashboardStats(raw: {
+export function mapAdminDashboard(raw: {
   totalUsers: number;
   doctors: number;
   patients: number;
   appointments: number;
-  documents: number;
-}): DashboardStats {
+  period: { preset: string; from: string; to: string };
+  timeSeries: { date: string; count: number }[];
+  statusBreakdown: { status: string; label: string; count: number }[];
+}): AdminDashboardData {
   return {
     totalUsers: raw.totalUsers,
     totalDoctors: raw.doctors,
     totalPatients: raw.patients,
-    totalAppointments: raw.appointments,
-    totalDocuments: raw.documents,
-    pendingAiOutputs: 0,
-    appointmentsToday: 0,
+    appointmentsInPeriod: raw.appointments,
+    period: raw.period,
+    timeSeries: raw.timeSeries,
+    statusBreakdown: raw.statusBreakdown,
   };
 }
 

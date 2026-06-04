@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
-  Users,
   FileCheck,
   TrendingUp,
   Clock,
@@ -12,29 +11,16 @@ import {
   FileText,
   BrainCircuit,
 } from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts';
 import { Button, Card, CardHeader, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { AppointmentStatusBadge } from '@/components/shared/StatusBadge';
 import { Avatar } from '@/components/ui/Avatar';
-import { adminApi, adminKeys } from '@/api/admin.api';
+import { AdminDashboard } from '@/features/admin/AdminDashboard';
 import { dashboardApi, dashboardKeys } from '@/api/dashboard.api';
 import { useAuthStore } from '@/stores/auth.store';
 import { UserRole } from '@/types';
 import type { Appointment } from '@/types';
-import { formatDateTime, formatRelative } from '@/utils/formatDate';
-
-// ─── Mock chart data (used when API unavailable) ─────────────────────────────
-const MOCK_CHART = Array.from({ length: 7 }, (_, i) => {
-  const d = new Date();
-  d.setDate(d.getDate() - (6 - i));
-  return {
-    date: d.toLocaleDateString('en-US', { weekday: 'short' }),
-    count: Math.floor(Math.random() * 10) + 2,
-  };
-});
+import { formatDateTime } from '@/utils/formatDate';
 
 function StatCard({ label, value, icon, trend, loading }: {
   label: string;
@@ -60,90 +46,6 @@ function StatCard({ label, value, icon, trend, loading }: {
         </div>
       </div>
     </Card>
-  );
-}
-
-function AdminDashboard() {
-  const navigate = useNavigate();
-
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: adminKeys.dashboard,
-    queryFn: adminApi.getDashboard,
-  });
-
-  const { data: activity = [] } = useQuery({
-    queryKey: adminKeys.activity,
-    queryFn: adminApi.getRecentActivity,
-  });
-
-  return (
-    <div className="p-6 space-y-6">
-      <PageHeader
-        title="Admin Dashboard"
-        subtitle="Overview of your organization"
-        action={
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => navigate('/users')}>
-              <Plus className="w-4 h-4 mr-1" /> Invite User
-            </Button>
-            <Button size="sm" onClick={() => navigate('/appointments')}>
-              <Plus className="w-4 h-4 mr-1" /> New Appointment
-            </Button>
-          </div>
-        }
-      />
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard label="Total Users" value={stats?.totalUsers} icon={<Users className="w-5 h-5" />} loading={statsLoading} />
-        <StatCard label="Doctors" value={stats?.totalDoctors} icon={<Users className="w-5 h-5" />} loading={statsLoading} />
-        <StatCard label="Patients" value={stats?.totalPatients} icon={<Users className="w-5 h-5" />} loading={statsLoading} />
-        <StatCard label="Appointments" value={stats?.totalAppointments} icon={<Calendar className="w-5 h-5" />} loading={statsLoading} />
-        <StatCard label="Documents" value={stats?.totalDocuments} icon={<FileText className="w-5 h-5" />} loading={statsLoading} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader title="Appointments (Last 7 Days)" subtitle="Sample chart" />
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={MOCK_CHART} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#0EA5E9" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card>
-          <CardHeader
-            title="Recent Activity"
-            action={
-              <Button size="sm" variant="ghost" onClick={() => navigate('/admin/audit-logs')}>
-                View all <ChevronRight className="w-3.5 h-3.5 ml-1" />
-              </Button>
-            }
-          />
-          <div className="space-y-3">
-            {activity.length === 0 ? (
-              <p className="text-sm text-muted text-center py-4">No recent activity</p>
-            ) : (
-              activity.slice(0, 6).map((log) => (
-                <div key={log.id} className="flex items-center gap-3">
-                  <Avatar name={log.userId} size="xs" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-slate-700 truncate">
-                      <span className="font-medium">{log.action}</span> — {log.resourceType}
-                    </p>
-                    <p className="text-xs text-muted">{formatRelative(log.createdAt)}</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-      </div>
-    </div>
   );
 }
 

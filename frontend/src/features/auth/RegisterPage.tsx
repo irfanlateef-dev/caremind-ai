@@ -98,7 +98,7 @@ export function RegisterPage() {
       login(res.user, res.accessToken, res.refreshToken);
       await hydrateAuthProfileAfterLogin();
       toast.success('Organization created! Welcome to CareMind.');
-      navigate('/admin/dashboard', { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err: unknown) {
       toast.error(getApiErrorMessage(err, 'Registration failed. Please try again.'));
     } finally {

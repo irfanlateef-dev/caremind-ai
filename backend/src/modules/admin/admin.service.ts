@@ -2,29 +2,46 @@ import type { PrismaClient } from '../../../node_modules/.prisma/tenant-client/i
 import { getCentralPrisma } from '../../core/tenant-registry.js';
 import { auditLog } from '../../core/audit-logger.js';
 import type { AuthContext } from '../../types/auth.js';
-import { z } from 'zod';
 import { enrichAuditLogs } from './audit-log-enrichment.js';
+import * as userRepo from '../users/users.repository.js';
+import {
+  buildAppointmentStatusBreakdown,
+  buildAppointmentTimeSeries,
+} from './admin.analytics.js';
+import { resolveAdminDateRange } from './admin.date-range.js';
+import type { DashboardQueryInput } from './admin.schema.js';
+import { auditLogQuerySchema } from './admin.schema.js';
+import type { z } from 'zod';
 
-export const auditLogQuerySchema = z.object({
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  userId: z.string().uuid().optional(),
-  action: z.string().optional(),
-  resourceType: z.string().optional(),
-  from: z.string().datetime().optional(),
-  to: z.string().datetime().optional(),
-});
+export { auditLogQuerySchema };
 
-export async function getDashboard(auth: AuthContext, tenantPrisma: PrismaClient) {
+export async function getDashboard(
+  auth: AuthContext,
+  tenantPrisma: PrismaClient,
+  query: DashboardQueryInput,
+) {
   const central = getCentralPrisma();
+  const { from, to, preset } = resolveAdminDateRange(query);
 
-  const [totalUsers, doctors, patients, appointments, documents] = await Promise.all([
-    central.user.count({ where: { orgId: auth.orgId, deletedAt: null } }),
-    tenantPrisma.doctor.count({ where: { orgId: auth.orgId } }),
-    tenantPrisma.patient.count({ where: { orgId: auth.orgId } }),
-    tenantPrisma.appointment.count({ where: { orgId: auth.orgId } }),
-    tenantPrisma.document.count({ where: { orgId: auth.orgId } }),
-  ]);
+  const orgWhere = { orgId: auth.orgId };
+  const periodWhere = {
+    ...orgWhere,
+    scheduledAt: { gte: from, lte: to },
+  };
+
+  const orgId = auth.orgId;
+
+  const [doctors, patients, periodAppointments, appointmentRows] = await Promise.all([
+      userRepo.countCentralUsers(central, orgId, 'doctor'),
+      userRepo.countCentralUsers(central, orgId, 'patient'),
+      tenantPrisma.appointment.count({ where: periodWhere }),
+      tenantPrisma.appointment.findMany({
+        where: periodWhere,
+        select: { scheduledAt: true, status: true },
+      }),
+    ]);
+
+  const totalUsers = doctors + patients;
 
   await auditLog({
     tenantPrisma,
@@ -35,7 +52,19 @@ export async function getDashboard(auth: AuthContext, tenantPrisma: PrismaClient
     resourceId: auth.orgId,
   });
 
-  return { totalUsers, doctors, patients, appointments, documents };
+  return {
+    totalUsers,
+    doctors,
+    patients,
+    appointments: periodAppointments,
+    period: {
+      preset,
+      from: from.toISOString(),
+      to: to.toISOString(),
+    },
+    timeSeries: buildAppointmentTimeSeries(appointmentRows, from, to),
+    statusBreakdown: buildAppointmentStatusBreakdown(appointmentRows),
+  };
 }
 
 export async function getAuditLogs(

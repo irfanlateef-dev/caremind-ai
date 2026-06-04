@@ -31,7 +31,6 @@ import { PatientsPage } from '@/features/patients/PatientsPage';
 import { PatientDetailPage } from '@/features/patients/PatientDetailPage';
 
 // Admin
-import { AdminDashboardPage } from '@/features/admin/AdminDashboardPage';
 import { AuditLogsPage } from '@/features/admin/AuditLogsPage';
 
 // Profile
@@ -116,11 +115,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'admin/dashboard',
-            element: (
-              <RoleGuard allowedRoles={[UserRole.ADMIN]}>
-                <AdminDashboardPage />
-              </RoleGuard>
-            ),
+            element: <Navigate to="/dashboard" replace />,
           },
           {
             path: 'admin/audit-logs',

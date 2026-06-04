@@ -10,7 +10,6 @@ import { authApi } from '@/api/auth.api';
 import { getApiErrorMessage } from '@/api/errors';
 import { useAuthStore } from '@/stores/auth.store';
 import { hydrateAuthProfileAfterLogin } from '@/hooks/useAuthProfile';
-import { UserRole } from '@/types';
 import { cn } from '@/utils/cn';
 
 const loginSchema = z.object({
@@ -60,9 +59,7 @@ export function LoginPage() {
       if (res.user && res.accessToken && res.refreshToken) {
         login(res.user, res.accessToken, res.refreshToken);
         await hydrateAuthProfileAfterLogin();
-        const user = useAuthStore.getState().user ?? res.user;
-        const dest = user.role === UserRole.ADMIN ? '/admin/dashboard' : '/dashboard';
-        navigate(from !== '/' && from !== '/login' ? from : dest, { replace: true });
+        navigate(from !== '/' && from !== '/login' ? from : '/dashboard', { replace: true });
         return;
       }
       toast.error('Unexpected response from server. Please try again.');
@@ -80,9 +77,7 @@ export function LoginPage() {
       const user = { ...res.user, email: res.user.email || loginEmail };
       login(user, res.accessToken, res.refreshToken);
       await hydrateAuthProfileAfterLogin();
-      const hydrated = useAuthStore.getState().user ?? user;
-      const dest = hydrated.role === UserRole.ADMIN ? '/admin/dashboard' : '/dashboard';
-      navigate(dest, { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err: unknown) {
       toast.error(getApiErrorMessage(err, 'Invalid MFA code'));
     } finally {

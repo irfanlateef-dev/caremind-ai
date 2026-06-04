@@ -7,6 +7,6 @@ export function RoleRedirect() {
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
-  if (role === UserRole.ADMIN) return <Navigate to="/admin/dashboard" replace />;
+  if (role === UserRole.ADMIN) return <Navigate to="/dashboard" replace />;
   return <Navigate to="/dashboard" replace />;
 }

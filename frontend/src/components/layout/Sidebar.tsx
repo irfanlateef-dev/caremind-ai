@@ -5,7 +5,6 @@ import {
   FileText,
   Users,
   User,
-  ShieldCheck,
   ScrollText,
   FileCheck,
   BrainCircuit,
@@ -38,7 +37,6 @@ const navItems: NavItem[] = [
   { to: '/documents', label: 'Documents', icon: <FileText className="w-5 h-5" />, roles: ['doctor', 'patient'] },
   { to: '/users', label: 'Users', icon: <Users className="w-5 h-5" />, roles: ['admin'] },
   { to: '/admin/audit-logs', label: 'Audit Logs', icon: <ScrollText className="w-5 h-5" />, roles: ['admin'] },
-  { to: '/admin/dashboard', label: 'Admin Panel', icon: <ShieldCheck className="w-5 h-5" />, roles: ['admin'] },
 ];
 
 function Logo({ collapsed }: { collapsed: boolean }) {

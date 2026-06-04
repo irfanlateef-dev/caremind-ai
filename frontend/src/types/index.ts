@@ -215,14 +215,18 @@ export interface AuditLog {
   summary?: string;
 }
 
-export interface DashboardStats {
+export interface AdminDashboardData {
   totalUsers: number;
   totalDoctors: number;
   totalPatients: number;
-  totalAppointments: number;
-  totalDocuments: number;
-  pendingAiOutputs: number;
-  appointmentsToday: number;
+  appointmentsInPeriod: number;
+  period: {
+    preset: string;
+    from: string;
+    to: string;
+  };
+  timeSeries: { date: string; count: number }[];
+  statusBreakdown: { status: string; label: string; count: number }[];
 }
 
 // ─── API Response Wrapper ─────────────────────────────────────────────────────
