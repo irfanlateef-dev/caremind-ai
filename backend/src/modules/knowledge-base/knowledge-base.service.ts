@@ -1,27 +1,33 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { PrismaClient } from '../../../node_modules/.prisma/tenant-client/index.js';
 import { getEmbeddingAdapter } from '../../adapters/embedding/index.js';
+import { toVectorLiteral } from './vector-literal.js';
 
 const CHUNK_SIZE_TOKENS = 512;
 const CHUNK_OVERLAP_TOKENS = 50;
 const APPROX_CHARS_PER_TOKEN = 4;
 
 function chunkText(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
   const chunkChars = CHUNK_SIZE_TOKENS * APPROX_CHARS_PER_TOKEN;
   const overlapChars = CHUNK_OVERLAP_TOKENS * APPROX_CHARS_PER_TOKEN;
-  const chunks: string[] = [];
 
-  if (text.length <= chunkChars) {
-    return [text.trim()].filter(Boolean);
+  if (trimmed.length <= chunkChars) {
+    return [trimmed];
   }
 
+  const chunks: string[] = [];
   let start = 0;
-  while (start < text.length) {
-    const end = Math.min(start + chunkChars, text.length);
-    const chunk = text.slice(start, end).trim();
+
+  while (start < trimmed.length) {
+    const end = Math.min(start + chunkChars, trimmed.length);
+    const chunk = trimmed.slice(start, end).trim();
     if (chunk) chunks.push(chunk);
-    start = end - overlapChars;
-    if (start >= text.length) break;
+    if (end >= trimmed.length) break;
+    const nextStart = end - overlapChars;
+    start = nextStart > start ? nextStart : end;
   }
 
   return chunks;
@@ -48,6 +54,11 @@ export async function ingestText(params: {
 
   const chunks = chunkText(text);
   if (chunks.length === 0) return;
+
+  const MAX_CHUNKS = 500;
+  if (chunks.length > MAX_CHUNKS) {
+    throw new Error(`Text produced too many chunks (${chunks.length}); aborting ingest`);
+  }
 
   const embeddingAdapter = getEmbeddingAdapter();
   const embeddings = await embeddingAdapter.embedBatch(chunks);
@@ -91,7 +102,7 @@ export async function ingestText(params: {
         record.appointmentId,
         record.documentType,
         record.content,
-        `[${embedding.join(',')}]`,
+        toVectorLiteral(embedding),
         JSON.stringify(record.metadata),
       );
     }

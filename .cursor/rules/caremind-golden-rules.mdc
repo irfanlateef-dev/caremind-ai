@@ -34,7 +34,7 @@ alwaysApply: true
 | Storage | MinIO only |
 | Meetings | LiveKit only |
 | STT | Deepgram only |
-| OCR | OCR.Space only |
+| OCR | Tesseract (+ poppler `pdftoppm` for PDF pages) only |
 | Email | Resend only |
 | PDF Export | Puppeteer only |
 | Queue | BullMQ + Redis only |

@@ -7,6 +7,8 @@ import {
 } from '@/components/ui';
 import { DocumentCard } from './DocumentCard';
 import { DocumentUploadModal } from './DocumentUploadModal';
+import { DocumentPreviewModal } from './DocumentPreviewModal';
+import type { Document } from '@/types';
 import { documentsApi, documentKeys } from '@/api/documents.api';
 import { useAuthStore } from '@/stores/auth.store';
 import { UserRole } from '@/types';
@@ -25,6 +27,7 @@ export function AppointmentDocumentsSection({
   const [page, setPage] = useState(1);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
 
   const canUpload =
     role === UserRole.ADMIN || role === UserRole.DOCTOR || role === UserRole.PATIENT;
@@ -60,15 +63,11 @@ export function AppointmentDocumentsSection({
   const reprocessMutation = useMutation({
     mutationFn: documentsApi.reprocess,
     onSuccess: () => {
-      toast.success('Reprocessing — OCR and AI indexing will run again');
+      toast.success('Reprocessing — text extraction and AI indexing will run again');
       queryClient.invalidateQueries({ queryKey: documentKeys.all });
     },
     onError: () => toast.error('Reprocess failed'),
   });
-
-  const handleView = () => {
-    toast.error('Document preview is not available yet (no signed-URL endpoint on backend).');
-  };
 
   const items = data?.items ?? [];
 
@@ -115,7 +114,7 @@ export function AppointmentDocumentsSection({
               key={doc.id}
               doc={doc}
               showPatient={false}
-              onView={handleView}
+              onView={setPreviewDoc}
               onDelete={() => setDeleteId(doc.id)}
               onReprocess={() => reprocessMutation.mutate(doc.id)}
               canDelete={canDelete}
@@ -129,6 +128,12 @@ export function AppointmentDocumentsSection({
           <Pagination page={page} totalPages={data.totalPages} onPageChange={setPage} />
         </div>
       )}
+
+      <DocumentPreviewModal
+        open={!!previewDoc}
+        document={previewDoc}
+        onClose={() => setPreviewDoc(null)}
+      />
 
       <DocumentUploadModal
         open={uploadOpen}

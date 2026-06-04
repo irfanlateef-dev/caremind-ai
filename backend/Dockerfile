@@ -29,6 +29,9 @@ RUN apt-get update && apt-get install -y \
     openssl \
     postgresql-client \
     chromium \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CHROME_PATH=/usr/bin/chromium

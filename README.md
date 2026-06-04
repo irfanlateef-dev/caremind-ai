@@ -39,7 +39,7 @@ The full connection string for each tenant is stored in the central `organizatio
 - **Node.js** 20+
 - **Docker** and **Docker Compose** (recommended for local infra)
 - **psql** client (required when registering new orgs — creates tenant databases on the tenant Postgres host)
-- API keys for MVP vendors (see `backend/.env.example`): OpenRouter, Voyage, Deepgram, OCR.Space, Resend, etc.
+- API keys for MVP vendors (see `backend/.env.example`): OpenRouter, Voyage, Deepgram, Resend, etc. Document OCR uses local Tesseract (no API key).
 
 ---
 

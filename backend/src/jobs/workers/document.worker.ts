@@ -1,23 +1,37 @@
-import { createRequire } from 'node:module';
 import { Worker } from 'bullmq';
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { getTenantPrisma } from '../../core/tenant-prisma.js';
 import { getStorageAdapter } from '../../adapters/storage/index.js';
 import { getOcrAdapter } from '../../adapters/ocr/index.js';
-import { ingestText } from '../../modules/knowledge-base/knowledge-base.service.js';
+import { embeddingQueue } from '../queue.js';
 import type { DocumentJobData } from '../queue.js';
 
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string }>;
+const MAX_EXTRACTED_CHARS = 500_000;
+const MAX_STORED_EXTRACTED_CHARS = 100_000;
 
-async function extractTextFromPdf(buffer: Buffer): Promise<string> {
-  try {
-    const data = await pdfParse(buffer);
-    return data.text as string;
-  } catch {
-    return '';
-  }
+function ocrMimeType(
+  mime: string,
+): 'application/pdf' | 'image/jpeg' | 'image/png' | null {
+  if (mime === 'application/pdf' || mime === 'image/png') return mime;
+  if (mime === 'image/jpeg' || mime === 'image/jpg') return 'image/jpeg';
+  return null;
+}
+
+function buildTextForIngest(
+  fileName: string,
+  documentType: string | null,
+  appointmentId: string | null,
+  body: string,
+): string {
+  const header = [
+    `File: ${fileName}`,
+    documentType ? `Document type: ${documentType}` : null,
+    appointmentId ? `Linked to appointment: ${appointmentId}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return `${header}\n\n${body.trim()}`;
 }
 
 async function processDocument(data: DocumentJobData): Promise<void> {
@@ -41,27 +55,10 @@ async function processDocument(data: DocumentJobData): Promise<void> {
     const buffer = await storage.download(document.storageBucket, document.storageKey);
     let extractedText = '';
 
-    if (document.mimeType === 'application/pdf') {
-      const pdfText = await extractTextFromPdf(buffer);
-
-      if (pdfText.trim().length < 100) {
-        const ocrResult = await ocr.extractText({
-          imageBuffer: buffer,
-          mimeType: 'application/pdf',
-        });
-        extractedText = ocrResult.text;
-      } else {
-        extractedText = pdfText;
-      }
-    } else if (
-      document.mimeType === 'image/jpeg' ||
-      document.mimeType === 'image/jpg' ||
-      document.mimeType === 'image/png'
-    ) {
-      const ocrMime: 'image/jpeg' | 'image/png' =
-        document.mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
-      const ocrResult = await ocr.extractText({ imageBuffer: buffer, mimeType: ocrMime });
-      extractedText = ocrResult.text;
+    const mime = ocrMimeType(document.mimeType);
+    if (mime) {
+      const result = await ocr.extractText({ imageBuffer: buffer, mimeType: mime });
+      extractedText = result.text.slice(0, MAX_EXTRACTED_CHARS);
     }
 
     if (!extractedText.trim()) {
@@ -70,24 +67,33 @@ async function processDocument(data: DocumentJobData): Promise<void> {
         data: { extractedText: null, processingStatus: 'failed' },
       });
       logger.warn(
-        { documentId, mimeType: document.mimeType, fileName: document.fileName, appointmentId: document.appointmentId },
+        {
+          documentId,
+          mimeType: document.mimeType,
+          fileName: document.fileName,
+          appointmentId: document.appointmentId,
+        },
         'No text extracted from document — not vectorized',
       );
       return;
     }
 
-    const header = [
-      `File: ${document.fileName}`,
-      document.documentType ? `Document type: ${document.documentType}` : null,
-      document.appointmentId ? `Linked to appointment: ${document.appointmentId}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n');
+    const textForIngest = buildTextForIngest(
+      document.fileName,
+      document.documentType,
+      document.appointmentId,
+      extractedText,
+    );
 
-    const textForIngest = `${header}\n\n${extractedText.trim()}`;
+    await tenantPrisma.document.update({
+      where: { id: documentId },
+      data: {
+        extractedText: textForIngest.slice(0, MAX_STORED_EXTRACTED_CHARS),
+      },
+    });
 
-    await ingestText({
-      tenantPrisma,
+    await embeddingQueue.add('document.vectorize', {
+      tenantDbUrl,
       orgId,
       patientId: document.patientId,
       text: textForIngest,
@@ -97,14 +103,9 @@ async function processDocument(data: DocumentJobData): Promise<void> {
       fileName: document.fileName,
     });
 
-    await tenantPrisma.document.update({
-      where: { id: documentId },
-      data: { extractedText: textForIngest, processingStatus: 'ready' },
-    });
-
     logger.info(
-      { documentId, appointmentId: document.appointmentId, fileName: document.fileName },
-      'Document processed and vectorized',
+      { documentId, textLength: textForIngest.length },
+      'Document text extracted — embedding job queued',
     );
   } catch (err) {
     logger.error({ err, documentId }, 'Document processing failed');
@@ -125,7 +126,7 @@ export function createDocumentWorker(): Worker {
     },
     {
       connection: { url: env.REDIS_URL },
-      concurrency: 5,
+      concurrency: 1,
     },
   );
 }

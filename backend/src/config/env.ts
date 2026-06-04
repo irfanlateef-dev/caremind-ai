@@ -56,9 +56,6 @@ const envSchema = z
     LIVEKIT_API_KEY: z.string().min(1),
     LIVEKIT_API_SECRET: z.string().min(1),
 
-    // OCR — OCR.Space (MVP)
-    OCRSPACE_API_KEY: z.string().min(1),
-
     // Email — smtp (Mailhog/dev) or resend (production MVP)
     EMAIL_PROVIDER: z.enum(['smtp', 'resend']).default('smtp'),
     EMAIL_FROM: z.string().email().default('dev@caremind.local'),

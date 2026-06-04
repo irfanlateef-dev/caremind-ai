@@ -77,6 +77,7 @@ export interface EmbeddingJobData {
   documentId?: string;
   appointmentId?: string;
   documentType: string;
+  fileName?: string;
 }
 
 export interface NotificationJobData {

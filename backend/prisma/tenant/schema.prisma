@@ -216,7 +216,7 @@ model VectorChunk {
   createdAt    DateTime                    @default(now())
 
   patient  Patient   @relation(fields: [patientId], references: [id])
-  document Document? @relation(fields: [documentId], references: [id])
+  document Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([orgId, patientId])
   @@map("vector_chunks")

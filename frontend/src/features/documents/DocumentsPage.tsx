@@ -9,6 +9,8 @@ import {
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DocumentCard } from './DocumentCard';
 import { DocumentUploadModal } from './DocumentUploadModal';
+import { DocumentPreviewModal } from './DocumentPreviewModal';
+import type { Document } from '@/types';
 import { documentsApi, documentKeys } from '@/api/documents.api';
 import { appointmentsApi, appointmentKeys } from '@/api/appointments.api';
 import { patientsApi, patientKeys } from '@/api/patients.api';
@@ -31,6 +33,7 @@ export function DocumentsPage() {
   const [selectedAppointmentId, setSelectedAppointmentId] = useState(ALL_APPOINTMENTS);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
 
   const canUpload = !isPatient;
   const listEnabled = isStaff ? !!selectedPatientId : !!selectedDoctorId;
@@ -161,9 +164,16 @@ export function DocumentsPage() {
     onError: () => toast.error('Delete failed'),
   });
 
-  const handleView = () => {
-    toast.error('Document preview is not available yet (no signed-URL endpoint on backend).');
-  };
+  const reprocessMutation = useMutation({
+    mutationFn: documentsApi.reprocess,
+    onSuccess: () => {
+      toast.success('Reprocessing — text extraction and AI indexing will run again');
+      queryClient.invalidateQueries({ queryKey: documentKeys.all });
+    },
+    onError: () => toast.error('Reprocess failed'),
+  });
+
+  const canManageDocuments = role === UserRole.ADMIN || role === UserRole.DOCTOR;
 
   const handlePatientChange = (patientId: string) => {
     setSelectedPatientId(patientId);
@@ -304,9 +314,14 @@ export function DocumentsPage() {
               key={doc.id}
               doc={doc}
               showPatient={false}
-              onView={handleView}
+              onView={setPreviewDoc}
               onDelete={() => setDeleteId(doc.id)}
-              canDelete={role === UserRole.ADMIN || role === UserRole.DOCTOR}
+              onReprocess={
+                canManageDocuments
+                  ? () => reprocessMutation.mutate(doc.id)
+                  : undefined
+              }
+              canDelete={canManageDocuments}
             />
           ))}
         </div>
@@ -315,6 +330,12 @@ export function DocumentsPage() {
       {listEnabled && data && data.totalPages > 1 && (
         <Pagination page={page} totalPages={data.totalPages} onPageChange={setPage} />
       )}
+
+      <DocumentPreviewModal
+        open={!!previewDoc}
+        document={previewDoc}
+        onClose={() => setPreviewDoc(null)}
+      />
 
       <DocumentUploadModal
         open={uploadOpen}

@@ -247,7 +247,7 @@ export async function listDocuments(
   };
 }
 
-export async function getDocument(
+async function getDocumentForRead(
   auth: AuthContext,
   tenantPrisma: PrismaClient,
   documentId: string,
@@ -262,6 +262,16 @@ export async function getDocument(
     }
   }
 
+  return document;
+}
+
+export async function getDocument(
+  auth: AuthContext,
+  tenantPrisma: PrismaClient,
+  documentId: string,
+) {
+  const document = await getDocumentForRead(auth, tenantPrisma, documentId);
+
   await auditLog({
     tenantPrisma,
     userId: auth.userId,
@@ -275,6 +285,33 @@ export async function getDocument(
     ...document,
     fileSize: fileSizeBytesOf(document),
     createdAt: document.createdAt.toISOString(),
+  };
+}
+
+export async function getDocumentPreviewContent(
+  auth: AuthContext,
+  tenantPrisma: PrismaClient,
+  documentId: string,
+) {
+  const document = await getDocumentForRead(auth, tenantPrisma, documentId);
+
+  const storage = getStorageAdapter();
+  const buffer = await storage.download(document.storageBucket, document.storageKey);
+
+  await auditLog({
+    tenantPrisma,
+    userId: auth.userId,
+    orgId: auth.orgId,
+    action: 'READ_RECORD',
+    resourceType: 'Document',
+    resourceId: documentId,
+    metadata: { preview: true },
+  });
+
+  return {
+    buffer,
+    mimeType: document.mimeType,
+    fileName: document.fileName,
   };
 }
 
@@ -320,6 +357,8 @@ export async function deleteDocument(
   if (!document || document.orgId !== auth.orgId) throw new NotFoundError('Document not found');
 
   const storage = getStorageAdapter();
+
+  await tenantPrisma.vectorChunk.deleteMany({ where: { documentId } });
   await storage.delete(document.storageBucket, document.storageKey);
   await repo.deleteDocument(tenantPrisma, documentId);
 

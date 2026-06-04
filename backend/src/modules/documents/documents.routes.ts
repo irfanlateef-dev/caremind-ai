@@ -80,6 +80,22 @@ documentRoutes.post(
 );
 
 documentRoutes.get(
+  '/:id/preview',
+  asyncHandler(async (req, res) => {
+    const { buffer, mimeType, fileName } = await service.getDocumentPreviewContent(
+      req.auth,
+      req.tenantPrisma,
+      req.params['id']!,
+    );
+    const safeName = fileName.replace(/[^\w.\-() ]/g, '_');
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(buffer);
+  }),
+);
+
+documentRoutes.get(
   '/:id',
   asyncHandler(async (req, res) => {
     const result = await service.getDocument(req.auth, req.tenantPrisma, req.params['id']!);

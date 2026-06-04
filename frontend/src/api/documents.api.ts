@@ -48,6 +48,14 @@ export const documentsApi = {
     return mapDocument(unwrap(res) as Record<string, unknown>);
   },
 
+  /** Authenticated binary stream for in-app preview (PDF / images). */
+  fetchPreviewBlob: async (documentId: string): Promise<Blob> => {
+    const res = await apiClient.get(`/api/documents/${documentId}/preview`, {
+      responseType: 'blob',
+    });
+    return res.data as Blob;
+  },
+
   upload: async (payload: UploadDocumentPayload): Promise<UploadDocumentsResult> => {
     const formData = new FormData();
     for (const file of payload.files) {

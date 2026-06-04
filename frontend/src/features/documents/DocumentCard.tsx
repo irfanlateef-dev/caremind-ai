@@ -1,12 +1,12 @@
 import { FileText, Image, Eye, Trash2, RefreshCw } from 'lucide-react';
-import { Card } from '@/components/ui';
+import { Button, Card } from '@/components/ui';
 import { DocumentStatusBadge } from '@/components/shared/StatusBadge';
 import type { Document } from '@/types';
 import { formatDate, formatDateTime, formatFileSize } from '@/utils';
 
 interface DocumentCardProps {
   doc: Document;
-  onView: () => void;
+  onView: (doc: Document) => void;
   onDelete: () => void;
   onReprocess?: () => void;
   canDelete: boolean;
@@ -22,6 +22,7 @@ export function DocumentCard({
   showPatient = true,
 }: DocumentCardProps) {
   const isImage = doc.fileType.startsWith('image/');
+  const canRetry = onReprocess && doc.processingStatus === 'failed';
 
   return (
     <Card padding="md" className="flex items-start gap-3 hover:shadow-elevated transition-shadow">
@@ -54,25 +55,37 @@ export function DocumentCard({
           <span className="text-xs text-muted">{formatFileSize(doc.fileSize)}</span>
           <span className="text-xs text-muted">{formatDate(doc.createdAt)}</span>
         </div>
+        {canRetry && (
+          <Button
+            type="button"
+            variant="danger"
+            size="sm"
+            className="mt-2"
+            leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+            onClick={onReprocess}
+          >
+            Retry processing
+          </Button>
+        )}
       </div>
       <div className="flex gap-1 flex-shrink-0">
         {doc.processingStatus === 'ready' && (
           <button
             type="button"
-            onClick={onView}
+            onClick={() => onView(doc)}
             className="p-2 text-muted hover:text-primary hover:bg-primary-50 rounded-md transition-colors"
             aria-label={`View ${doc.fileName}`}
           >
             <Eye className="w-4 h-4" />
           </button>
         )}
-        {doc.processingStatus === 'failed' && onReprocess && (
+        {canRetry && (
           <button
             type="button"
             onClick={onReprocess}
-            className="p-2 text-muted hover:text-primary hover:bg-primary-50 rounded-md transition-colors"
+            className="p-2 text-danger hover:text-danger-600 hover:bg-danger-50 rounded-md transition-colors"
             aria-label={`Reprocess ${doc.fileName}`}
-            title="Re-run OCR and AI indexing"
+            title="Re-run text extraction and AI indexing"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
