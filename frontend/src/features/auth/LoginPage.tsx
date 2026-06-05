@@ -13,7 +13,6 @@ import { hydrateAuthProfileAfterLogin } from '@/hooks/useAuthProfile';
 import { cn } from '@/utils/cn';
 import { getOrCreateDeviceId } from '@/lib/device';
 import { TrustDevicePromptModal } from './TrustDevicePromptModal';
-import { DEMO_LOGIN_ACCOUNTS, DEMO_SEED_PASSWORD, isDemoAccountEmail } from '@/constants/demo-accounts';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -57,16 +56,11 @@ export function LoginPage() {
   const {
     register,
     handleSubmit,
-    setValue,
-    watch,
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '', rememberMe: false },
   });
-
-  const emailValue = watch('email', '');
-  const showDemoMfaNote = isDemoAccountEmail(emailValue);
 
   const { register: mfaRegister, handleSubmit: handleMfaSubmit, watch: watchMfa, formState: { errors: mfaErrors } } = useForm<MfaFormValues>({
     resolver: zodResolver(mfaSchema),
@@ -262,41 +256,10 @@ export function LoginPage() {
                   </span>
                 </label>
 
-                {showDemoMfaNote && (
-                  <p className="text-sm text-muted bg-slate-50 border border-border rounded-lg px-3 py-2">
-                    Demo clinic accounts do not use two-factor authentication and cannot enable MFA in
-                    settings.
-                  </p>
-                )}
-
                 <Button type="submit" className="w-full" size="lg" loading={isLoading}>
                   Sign in
                 </Button>
               </form>
-
-              <div className="mt-6 pt-6 border-t border-border">
-                <p className="text-xs font-medium text-slate-700 mb-1">Demo clinic (quick fill)</p>
-                <p className="text-xs text-muted mb-3">
-                  Password: <span className="font-mono text-slate-700">{DEMO_SEED_PASSWORD}</span> — MFA not
-                  available for these accounts.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {DEMO_LOGIN_ACCOUNTS.map((account) => (
-                    <Button
-                      key={account.email}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setValue('email', account.email, { shouldValidate: true });
-                        setValue('password', DEMO_SEED_PASSWORD, { shouldValidate: true });
-                      }}
-                    >
-                      {account.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
 
               <p className="text-center text-sm text-muted mt-6">
                 New organization?{' '}
