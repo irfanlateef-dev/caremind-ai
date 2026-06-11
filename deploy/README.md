@@ -6,3 +6,6 @@
 | Docker image builds | `build-images.sh` (this folder) |
 | Docker Hub publish guide | `DOCKERHUB.md` |
 | Test guide | `TESTING.md` |
+
+
+`curl -fsSL https://raw.githubusercontent.com/divescale/caremind-deploy-bundle/master/deploy/install.sh | sudo bash`
