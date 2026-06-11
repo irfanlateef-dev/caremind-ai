@@ -8,6 +8,8 @@ import { UserRole } from '@/types';
 // Auth pages
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
+import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
+import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
 
 // Dashboard
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
@@ -48,6 +50,8 @@ export const router = createBrowserRouter([
       { index: true, element: <LandingPage /> },
       { path: 'self-host', element: <SelfHostPage /> },
       { path: 'login', element: <LoginPage /> },
+      { path: 'forgot-password', element: <ForgotPasswordPage /> },
+      { path: 'reset-password', element: <ResetPasswordPage /> },
       { path: 'register', element: <RegisterPage /> },
       {
         element: (

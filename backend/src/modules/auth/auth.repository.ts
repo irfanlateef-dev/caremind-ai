@@ -164,3 +164,40 @@ export async function findTrustedDeviceById(prisma: CentralPrisma, id: string, u
 export async function deleteTrustedDevice(prisma: CentralPrisma, id: string) {
   return prisma.trustedDevice.delete({ where: { id } });
 }
+
+export async function deleteUnusedPasswordResetTokens(
+  prisma: CentralPrisma,
+  userId: string,
+) {
+  return prisma.passwordResetToken.deleteMany({
+    where: { userId, usedAt: null },
+  });
+}
+
+export async function createPasswordResetToken(
+  prisma: CentralPrisma,
+  data: { id: string; userId: string; tokenHash: string; expiresAt: Date },
+) {
+  return prisma.passwordResetToken.create({ data });
+}
+
+export async function findValidPasswordResetToken(
+  prisma: CentralPrisma,
+  tokenHash: string,
+) {
+  return prisma.passwordResetToken.findFirst({
+    where: {
+      tokenHash,
+      usedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    include: { user: true },
+  });
+}
+
+export async function markPasswordResetTokenUsed(prisma: CentralPrisma, id: string) {
+  return prisma.passwordResetToken.update({
+    where: { id },
+    data: { usedAt: new Date() },
+  });
+}

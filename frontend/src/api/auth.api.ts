@@ -147,6 +147,18 @@ export const authApi = {
     await apiClient.post('/api/auth/change-password', payload);
   },
 
+  forgotPassword: async (email: string): Promise<{ success: boolean; message: string }> => {
+    const res = await apiClient.post('/api/auth/forgot-password', { email });
+    return unwrap(res) as { success: boolean; message: string };
+  },
+
+  resetPassword: async (payload: {
+    token: string;
+    newPassword: string;
+  }): Promise<void> => {
+    await apiClient.post('/api/auth/reset-password', payload);
+  },
+
   registerTrustedDevice: async (deviceId: string): Promise<{ trustedUntil: string }> => {
     const res = await apiClient.post('/api/auth/trusted-devices', { deviceId });
     return unwrap(res) as { success: boolean; trustedUntil: string };

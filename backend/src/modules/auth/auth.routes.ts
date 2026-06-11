@@ -12,6 +12,8 @@ import {
   mfaVerifySchema,
   mfaSetupVerifySchema,
   changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
   trustedDeviceIdParamSchema,
   registerTrustedDeviceSchema,
 } from './auth.schema.js';
@@ -89,6 +91,32 @@ authRoutes.post(
   validate({ body: changePasswordSchema }),
   asyncHandler(async (req, res) => {
     const result = await service.changePassword(req.auth.userId, req.body);
+    res.json({
+      data: result,
+      meta: { requestId: uuidv4(), timestamp: new Date().toISOString() },
+    });
+  }),
+);
+
+authRoutes.post(
+  '/forgot-password',
+  authRateLimiter,
+  validate({ body: forgotPasswordSchema }),
+  asyncHandler(async (req, res) => {
+    const result = await service.forgotPassword(req.body);
+    res.json({
+      data: result,
+      meta: { requestId: uuidv4(), timestamp: new Date().toISOString() },
+    });
+  }),
+);
+
+authRoutes.post(
+  '/reset-password',
+  authRateLimiter,
+  validate({ body: resetPasswordSchema }),
+  asyncHandler(async (req, res) => {
+    const result = await service.resetPassword(req.body);
     res.json({
       data: result,
       meta: { requestId: uuidv4(), timestamp: new Date().toISOString() },

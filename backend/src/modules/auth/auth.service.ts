@@ -17,11 +17,15 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../core/errors.js';
+import { env } from '../../config/env.js';
+import { logger } from '../../config/logger.js';
 import type {
   RegisterOrgInput,
   LoginInput,
   LoginContext,
   ChangePasswordInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
   MfaVerifyInput,
 } from './auth.schema.js';
 import { resolveUserProfile } from './auth-profile.js';
@@ -38,6 +42,7 @@ import { deviceNameFromUserAgent, hashDeviceId } from './auth.device.js';
 import { isDemoAccountEmail } from '../../core/demo-users.js';
 
 const BCRYPT_ROUNDS = 12;
+const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -291,6 +296,73 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
 
   const passwordHash = await bcrypt.hash(input.newPassword, BCRYPT_ROUNDS);
   await repo.updatePasswordHash(central, userId, passwordHash);
+
+  return { success: true };
+}
+
+async function sendPasswordResetEmail(to: string, resetUrl: string) {
+  const emailAdapter = getEmailAdapter();
+  await emailAdapter
+    .send({
+      to,
+      subject: 'Reset your CareMind AI password',
+      html: `
+        <p>You requested a password reset for your CareMind AI account.</p>
+        <p><a href="${resetUrl}">Click here to reset your password</a></p>
+        <p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
+      `,
+    })
+    .catch((err) => {
+      logger.warn({ err, to }, 'Failed to send password reset email');
+    });
+}
+
+export async function forgotPassword(input: ForgotPasswordInput) {
+  const central = getCentralPrisma();
+  const user = await repo.findUserByEmail(central, input.email);
+
+  if (user && !user.deletedAt) {
+    const rawToken = crypto.randomBytes(32).toString('base64url');
+    const tokenHash = hashToken(rawToken);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
+
+    await repo.deleteUnusedPasswordResetTokens(central, user.id);
+    await repo.createPasswordResetToken(central, {
+      id: uuidv4(),
+      userId: user.id,
+      tokenHash,
+      expiresAt,
+    });
+
+    const resetUrl = `${env.FRONTEND_URL}/reset-password?token=${encodeURIComponent(rawToken)}`;
+    await sendPasswordResetEmail(user.email, resetUrl);
+  }
+
+  return {
+    success: true,
+    message:
+      'If an account exists for that email, you will receive password reset instructions shortly.',
+  };
+}
+
+export async function resetPassword(input: ResetPasswordInput) {
+  const central = getCentralPrisma();
+  const tokenHash = hashToken(input.token);
+  const resetToken = await repo.findValidPasswordResetToken(central, tokenHash);
+
+  if (!resetToken || resetToken.user.deletedAt) {
+    throw new AuthError('Invalid or expired reset link');
+  }
+
+  const sameAsOld = await bcrypt.compare(input.newPassword, resetToken.user.passwordHash);
+  if (sameAsOld) {
+    throw new ValidationError('New password must be different from the current password');
+  }
+
+  const passwordHash = await bcrypt.hash(input.newPassword, BCRYPT_ROUNDS);
+  await repo.updatePasswordHash(central, resetToken.userId, passwordHash);
+  await repo.markPasswordResetTokenUsed(central, resetToken.id);
+  await repo.revokeAllUserRefreshTokens(central, resetToken.userId);
 
   return { success: true };
 }

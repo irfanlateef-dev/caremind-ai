@@ -242,6 +242,15 @@ export function LoginPage() {
                   {...register('password')}
                 />
 
+                <div className="flex justify-end -mt-1">
+                  <Link
+                    to="/forgot-password"
+                    className="text-sm text-primary font-medium hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+
                 <label className="flex items-start gap-2 cursor-pointer">
                   <input
                     type="checkbox"

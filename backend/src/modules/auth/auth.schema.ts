@@ -53,6 +53,15 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(8).max(128),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Reset token is required'),
+  newPassword: z.string().min(8).max(128),
+});
+
 export type RegisterOrgInput = z.infer<typeof registerOrgSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type LoginContext = z.infer<typeof loginContextSchema>;
@@ -60,3 +69,5 @@ export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
 export type MfaVerifyInput = z.infer<typeof mfaVerifySchema>;
 export type RegisterTrustedDeviceInput = z.infer<typeof registerTrustedDeviceSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
